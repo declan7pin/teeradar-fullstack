@@ -14,6 +14,9 @@
   src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 ></script>
 
+  <!-- TeeRadar map rotation support -->
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+
 <script>
   try {
     const runningInsideApp =
@@ -1002,6 +1005,76 @@ html.gps-map-fullscreen body{
   background:#dce7e9;
 }
 
+  
+/* ============================================
+   TEERADAR — GPS MAP SHOT TRACKING BUTTONS
+   ============================================ */
+
+#gpsMapShotActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 10px 12px;
+
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+}
+
+#gpsMapShotActions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+
+  padding: 10px 8px;
+  border-radius: 12px;
+
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+#gpsMapTrackShotBtn {
+  background: #00796b;
+  color: #ffffff;
+  border: 1px solid #00796b;
+}
+
+#gpsMapBallOnGreenBtn {
+  background: #ffffff;
+  color: #00796b;
+  border: 1px solid #00796b;
+}
+
+/* Keep the buttons visible in full-screen GPS mode. */
+.gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
+  flex: 0 0 auto;
+
+  padding-bottom:
+    calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Keep the map flexible in compact Round Mode. */
+html.round-mode #gpsMapShotActions {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 400px) {
+  #gpsMapShotActions {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  #gpsMapShotActions button {
+    font-size: 12px;
+    min-height: 44px;
+  }
+}
+
+
 /*
  * Keep Leaflet above its own map only.
  * It must never overlap TeeRadar modals or Round Mode.
@@ -1658,6 +1731,165 @@ html.round-mode #premiumWrap{
   overflow:hidden;
 
   border-radius:22px;
+}
+  
+/* =========================================================
+   TEERADAR FULL-HEIGHT PLAY MODE
+   ========================================================= */
+
+html.round-mode #scorecardSection {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+html.round-mode #scorecardWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html.round-mode #premiumWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+}
+
+html.round-mode #premiumWrap .premTop {
+  flex: 0 0 auto;
+}
+
+html.round-mode #premiumWrap .premBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html.round-mode #gpsMapCard {
+  flex: 1 0 300px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+html.round-mode #gpsMapCard #gpsMap {
+  flex: 1 1 auto;
+  min-height: 220px;
+  height: auto !important;
+}
+
+html.round-mode #premiumWrap .premGrid {
+  flex: 0 0 auto;
+}
+
+  
+/* ============================================
+   TEERADAR COMPACT FULL-SCREEN PLAY MODE
+   ============================================ */
+
+html.round-mode #scorecardSection {
+  max-width: none !important;
+  padding: env(safe-area-inset-top, 0px) 0
+           env(safe-area-inset-bottom, 0px) !important;
+  border-radius: 0 !important;
+}
+
+html.round-mode #premiumWrap {
+  border-radius: 0 !important;
+}
+
+html.round-mode #premiumWrap .premTop {
+  padding: 10px 14px !important;
+  border-radius: 0 !important;
+}
+
+html.round-mode #premiumWrap .premHoleTitle {
+  font-size: 1.5rem !important;
+}
+
+html.round-mode #premiumWrap .premScoreBig {
+  font-size: 1.8rem !important;
+}
+
+html.round-mode .roundModeActions {
+  margin: 0 !important;
+  padding: 6px 12px !important;
+  gap: 8px !important;
+}
+
+html.round-mode .roundModeExitBtn,
+html.round-mode .roundModeDeleteBtn {
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+}
+
+html.round-mode #premiumWrap .premBody {
+  padding: 0 !important;
+}
+
+html.round-mode #gpsMapCard {
+  border: 0 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  min-height: 350px;
+}
+/* =========================================================
+   TEERADAR — PLAY MODE GPS MAP LAYOUT
+   ========================================================= */
+
+html.round-mode #scorecardSection {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+html.round-mode #scorecardWrap,
+html.round-mode #premiumWrap {
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+html.round-mode #premiumWrap .premBody {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
+  position: relative !important;
+  flex: 1 0 350px !important;
+  min-height: 350px !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
+  position: relative !important;
+  inset: auto !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 350px !important;
+  min-height: 300px !important;
+}
+
+html.round-mode #premiumWrap .premTop,
+html.round-mode #premiumWrap .premGrid {
+  flex: 0 0 auto !important;
 }
 
 /* =========================================================
@@ -2873,6 +3105,66 @@ html.app-mode .activeRoundCard{
 #shareRoundModalBack .toast {
   flex: 0 0 auto;
 }
+  
+/* ================================================
+   TEERADAR PLAY MODE — FLOATING GPS DISTANCES
+   ================================================ */
+
+/* Only change the layout during an active round */
+html.round-mode #gpsDistanceGrid {
+  position: static;
+}
+
+/* Float the existing three distances over the map */
+html.round-mode #gpsDistanceCard .gpsDistanceGrid {
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 165px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000001;
+
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  width: calc(100% - 32px);
+  max-width: 430px;
+  margin: 0 !important;
+
+  pointer-events: none;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem {
+  padding: 9px 8px !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 14px !important;
+
+  background: rgba(15, 31, 37, .88) !important;
+  box-shadow: 0 5px 18px rgba(0,0,0,.22);
+
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem span {
+  color: rgba(255,255,255,.72) !important;
+  font-size: 11px !important;
+  font-weight: 800;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem strong {
+  color: #fff !important;
+  font-size: 25px !important;
+  font-weight: 1000;
+  line-height: 1.15;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
+  background: rgba(0, 105, 84, .94) !important;
+  border-color: rgba(255,255,255,.3) !important;
+}
+
 </style>
 </head>
 <body>
@@ -2925,7 +3217,7 @@ html.app-mode .activeRoundCard{
   </div>
 </div>
 
-    <div id="app" style="display:none;">
+    <div id="app" style="display:block;">
       <div class="grid">
         <!-- LEFT -->
         <section class="card" id="createRoundSection">
@@ -3255,6 +3547,37 @@ html.app-mode .activeRoundCard{
 
 </div>
 
+            <!-- PLAY MODE HAMBURGER MENU -->
+<div id="playModeMenu">
+  <button
+    id="playModeMenuBtn"
+    type="button"
+    aria-label="Open round menu"
+    aria-expanded="false"
+    onclick="togglePlayModeMenu()"
+  >
+    ☰
+  </button>
+
+  <div id="playModeMenuPanel" hidden>
+    <button type="button" onclick="playModeMenuAction('score')">
+      Hole score
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('scorecard')">
+      View scorecard
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('exit')">
+      Exit round
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('delete')">
+      Delete round
+    </button>
+  </div>
+</div>
+
   <!-- ✅ PREMIUM hole-by-hole (only for published + complete courses) -->
   <div id="premiumWrap">
     <div class="premTop">
@@ -3270,6 +3593,25 @@ html.app-mode .activeRoundCard{
      GPS MAP
      ===================================================== -->
 <div class="gpsMapCard" id="gpsMapCard">
+
+<!-- GPS MAP SHOT TRACKING CONTROLS -->
+<div id="gpsMapShotActions">
+  <button
+    id="gpsMapTrackShotBtn"
+    type="button"
+    onclick="document.getElementById('trackShotBtn')?.click()"
+  >
+    📍 Track Shot
+  </button>
+
+  <button
+    id="gpsMapBallOnGreenBtn"
+    type="button"
+    onclick="document.getElementById('trackShotBallOnGreen')?.click()"
+  >
+    🟢 Ball on Green
+  </button>
+</div>
 
 <div class="gpsMapHeader">
 
@@ -3299,7 +3641,7 @@ html.app-mode .activeRoundCard{
       id="gpsRecenterBtn"
       class="gpsRecenterBtn"
       type="button"
-      aria-label="Recentre map on your location"
+      aria-label="Re-centre map on current hole"
       title="Recentre"
     >
       ◎ Recentre
@@ -3318,21 +3660,97 @@ html.app-mode .activeRoundCard{
   class="gpsRecenterBtn"
   type="button"
   style="display:none;"
-  aria-label="Clear measured point"
+  aria-label="Clear marked location"
   title="Clear measurement"
 >
-  ✕ Clear
+  ✕ Clear Marked Location
 </button>
 
 </div>
 
 </div>
+
+<!-- ADMIN TEE COORDINATE EDITOR -->
+<div
+  id="teeAdminPanel"
+  style="display:none;padding:10px 12px;border-top:1px solid rgba(255,255,255,.18);"
+>
+  <button
+    type="button"
+    id="teeEditToggle"
+    class="gpsRecenterBtn"
+  >
+    📍 Edit tees
+  </button>
+
+  <div
+    id="teeEditControls"
+    style="display:none;margin-top:9px;gap:8px;flex-wrap:wrap;align-items:center;"
+  >
+    <select
+      id="teeEditType"
+      aria-label="Tee type"
+      style="padding:8px;border-radius:7px;"
+    >
+      <option value="front">Front tee</option>
+      <option value="back">Back tee</option>
+    </select>
+
+    <button
+      type="button"
+      id="teeSaveBtn"
+      class="gpsRecenterBtn"
+      disabled
+    >
+      Save selected point
+    </button>
+
+    <button
+      type="button"
+      id="teeDeleteBtn"
+      class="gpsRecenterBtn"
+    >
+      Delete saved tee
+    </button>
+
+    <span
+      id="teeEditStatus"
+      style="font-size:12px;"
+    >
+      Tap the map to choose a tee position.
+    </span>
+  </div>
+</div>
+
+
+<!-- GPS MAP SHOT TRACKING CONTROLS -->
+<div id="gpsMapShotActions">
+
+  <button
+    type="button"
+    id="gpsMapTrackShotBtn"
+    onclick="document.getElementById('trackShotBtn')?.click()"
+  >
+    📍 Track Shot
+  </button>
+
+  <button
+    type="button"
+    id="gpsMapBallOnGreenBtn"
+    onclick="document.getElementById('trackShotBallOnGreen')?.click()"
+  >
+    🟢 Ball on Green
+  </button>
+
+</div>
+
 <div
   id="gpsMap"
   class="gpsMapLoading"
 >
   Enable GPS to load the satellite map.
 </div>
+
 
 </div>
 
@@ -3378,38 +3796,244 @@ html.app-mode .activeRoundCard{
         <strong id="gpsBackDistance">—</strong>
       </div>
 
+        </div>
+
+    <!-- PLAY MODE HOLE SELECTOR -->
+<div id="playHoleSelector">
+  <div class="playHoleSelectorPanel">
+
+    <div class="playHoleSelectorHeader">
+      <strong>Select Hole</strong>
+
+      <button
+        type="button"
+        onclick="closePlayHoleSelector()"
+        aria-label="Close hole selector"
+      >
+        ×
+      </button>
+    </div>
+
+    <div id="playHoleSelectorGrid"></div>
+
+  </div>
+</div>
+
+    <!-- PLAY MODE HOLE INFORMATION -->
+    <div id="playHoleInfo">
+      <div class="playHoleInfoItem">
+  <span>HOLE</span>
+
+  <button
+    id="playHoleJumpBtn"
+    type="button"
+    onclick="openPlayHoleSelector()"
+    aria-label="Select a hole"
+  >
+    <span id="playHoleNumber">—</span>
+    <span class="playHoleJumpChevron">⌄</span>
+  </button>
+</div>
+
+      <div class="playHoleInfoItem">
+        <span>PAR</span>
+        <strong id="playHolePar">—</strong>
+      </div>
+
+      <div class="playHoleInfoItem">
+        <span>ROUND SCORE</span>
+        <strong id="playRoundScore">E</strong>
+      </div>
     </div>
 
     <div
       class="gpsAccuracy"
       id="gpsAccuracy"
     ></div>
-  </div>
+
+       <!-- Shot tracking is optional to use -->
+<div
+  id="trackShotSummary"
+  role="status"
+  aria-live="polite"
+  style="font-size:12px;color:#64748b;margin-top:10px;"
+>
+  Track a shot when you want. Manual scoring remains available.
+</div>
+
+<div id="trackShotHistory" style="font-size:12px;margin-top:8px;"></div>
+
+<div
+  id="trackShotGreenPrompt"
+  role="status"
+  aria-live="polite"
+  style="display:none;margin-top:8px;padding:12px;background:#e6f4f1;border-radius:12px;font-size:13px;"
+></div>
+
+<div id="trackShotControls">
+
+    <!-- TeeRadar manual shot tracking -->
+    <div
+      style="margin-top:14px; display:grid; gap:10px;"
+    >
+      <select
+  id="trackShotClub"
+  class="input"
+  style="width:100%; min-height:44px;"
+  aria-label="Club used for shot"
+>
+  <option value="">Select club (optional)</option>
+
+  <optgroup label="Driver">
+    <option value="Driver">Driver</option>
+    <option value="Mini Driver">Mini Driver</option>
+  </optgroup>
+
+  <optgroup label="Fairway Woods">
+    <option value="2 Wood">2 Wood</option>
+    <option value="3 Wood">3 Wood</option>
+    <option value="4 Wood">4 Wood</option>
+    <option value="5 Wood">5 Wood</option>
+    <option value="7 Wood">7 Wood</option>
+    <option value="9 Wood">9 Wood</option>
+    <option value="11 Wood">11 Wood</option>
+    <option value="13 Wood">13 Wood</option>
+  </optgroup>
+
+  <optgroup label="Hybrids">
+    <option value="1 Hybrid">1 Hybrid</option>
+    <option value="2 Hybrid">2 Hybrid</option>
+    <option value="3 Hybrid">3 Hybrid</option>
+    <option value="4 Hybrid">4 Hybrid</option>
+    <option value="5 Hybrid">5 Hybrid</option>
+    <option value="6 Hybrid">6 Hybrid</option>
+    <option value="7 Hybrid">7 Hybrid</option>
+    <option value="8 Hybrid">8 Hybrid</option>
+    <option value="9 Hybrid">9 Hybrid</option>
+  </optgroup>
+
+  <optgroup label="Irons">
+    <option value="1 Iron">1 Iron</option>
+    <option value="2 Iron">2 Iron</option>
+    <option value="3 Iron">3 Iron</option>
+    <option value="4 Iron">4 Iron</option>
+    <option value="5 Iron">5 Iron</option>
+    <option value="6 Iron">6 Iron</option>
+    <option value="7 Iron">7 Iron</option>
+    <option value="8 Iron">8 Iron</option>
+    <option value="9 Iron">9 Iron</option>
+    <option value="10 Iron">10 Iron</option>
+    <option value="11 Iron">11 Iron</option>
+    <option value="Driving Iron">Driving Iron</option>
+  </optgroup>
+
+  <optgroup label="Wedges">
+    <option value="PW">Pitching Wedge (PW)</option>
+    <option value="AW">Approach Wedge (AW)</option>
+    <option value="GW">Gap Wedge (GW)</option>
+    <option value="SW">Sand Wedge (SW)</option>
+    <option value="LW">Lob Wedge (LW)</option>
+    <option value="UW">Utility Wedge (UW)</option>
+    <option value="48 Wedge">48° Wedge</option>
+    <option value="50 Wedge">50° Wedge</option>
+    <option value="52 Wedge">52° Wedge</option>
+    <option value="54 Wedge">54° Wedge</option>
+    <option value="56 Wedge">56° Wedge</option>
+    <option value="58 Wedge">58° Wedge</option>
+    <option value="60 Wedge">60° Wedge</option>
+    <option value="62 Wedge">62° Wedge</option>
+    <option value="64 Wedge">64° Wedge</option>
+  </optgroup>
+
+  <optgroup label="Putter & Other">
+    <option value="Putter">Putter</option>
+    <option value="Chipper">Chipper</option>
+    <option value="Other">Other</option>
+  </optgroup>
+</select>
+
+      <button
+        id="trackShotBtn"
+        class="btn2"
+        type="button"
+        style="width:100%; min-height:48px;"
+      >
+        📍 Track Shot
+      </button>
+
+      <button
+  id="trackShotBallOnGreen"
+  class="btn2 secondary"
+  type="button"
+  style="width:100%;min-height:48px;"
+>
+  🟢 Ball on Green
+</button>
+
+            <div
+        id="trackShotStatus"
+        role="status"
+        aria-live="polite"
+        style="font-size:13px;"
+      ></div>
+    </div>
+
+  </div><!-- /trackShotControls -->
 
   <div class="premGrid">
-    <div class="premPanel">
-          <div class="premRow">
-            <label>Strokes</label>
-            <div class="premBtns" id="premScoreBtns"></div>
-          </div>
 
-          <div class="premRow">
-            <label>Putts</label>
-            <div class="premBtns" id="premPuttBtns"></div>
-          </div>
+  <!-- Close Hole Score Panel -->
+  <button
+    id="playScoreCloseBtn"
+    type="button"
+    onclick="document.querySelector('#premiumWrap .premGrid')?.classList.remove('playScoreOpen')"
+    aria-label="Close hole scoring"
+  >
+    ×
+  </button>
 
-          <div class="premNav">
-            <button class="btn2 secondary" id="premPrevBtn" type="button">← Prev hole</button>
-            <button class="btn2" id="premNextBtn" type="button">Next hole →</button>
-          </div>
+  <div class="premPanel">
 
-          <div class="premMiniNote" id="premNote"></div>
-        </div>
-      </div>
+    <div class="premRow">
+      <label>Strokes</label>
+      <div class="premBtns" id="premScoreBtns"></div>
     </div>
-  </div>
 
-  <div class="tableWrap" id="tableWrap">
+    <div class="premRow">
+      <label>Putts</label>
+      <div class="premBtns" id="premPuttBtns"></div>
+    </div>
+
+    <div class="premNav">
+      <button class="btn2 secondary" id="premPrevBtn" type="button">← Prev hole</button>
+      <button class="btn2" id="premNextBtn" type="button">Next hole →</button>
+    </div>
+
+    <div class="premMiniNote" id="premNote"></div>
+
+  </div>
+</div>
+</div>
+</div>
+
+    <div class="tableWrap" id="tableWrap">
+
+    <div id="playScorecardHeader">
+      <div>
+        <strong>Scorecard</strong>
+        <span>Live round scores</span>
+      </div>
+
+      <button
+        id="playScorecardCloseBtn"
+        type="button"
+        aria-label="Close scorecard"
+        onclick="closePlayScorecard()"
+      >
+        ×
+      </button>
+    </div>
+
     <table id="scoreTable">
       <thead id="scoreHead"></thead>
       <tbody id="scoreBody"></tbody>
@@ -4420,6 +5044,1402 @@ let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
 
+    // =========================================================
+// TEERADAR — MANUAL SHOT TRACKING
+// =========================================================
+
+let trackShotSaving = false;
+let trackShotLastActivity = 0;
+let trackShotHistoryKey = "";
+let trackShotHistory = [];
+
+const TRACK_SHOT_IDLE_MS = 20 * 60 * 1000;
+
+function trackShotGreenKey(roundId, holeNumber) {
+  return `teeradar_green_${roundId}_${holeNumber}`;
+}
+
+function trackShotGetGreen(roundId, holeNumber) {
+  try {
+    return JSON.parse(
+      localStorage.getItem(trackShotGreenKey(roundId, holeNumber)) || "null"
+    );
+  } catch {
+    return null;
+  }
+}
+
+function trackShotDistanceMetres(a, b) {
+  const r = Math.PI / 180;
+  const dLat = (Number(b.latitude) - Number(a.latitude)) * r;
+  const dLng = (Number(b.longitude) - Number(a.longitude)) * r;
+
+  const v =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(Number(a.latitude) * r) *
+      Math.cos(Number(b.latitude) * r) *
+      Math.sin(dLng / 2) ** 2;
+
+  return Math.round(
+    6371000 * 2 *
+    Math.atan2(Math.sqrt(v), Math.sqrt(Math.max(0, 1 - v)))
+  );
+}
+
+function trackShotCheckIdle() {
+  if (
+    trackShotLastActivity &&
+    Date.now() - trackShotLastActivity >= TRACK_SHOT_IDLE_MS
+  ) {
+    const status = document.getElementById("trackShotStatus");
+
+    if (status && !trackShotSaving) {
+      status.textContent =
+        "Tracking idle for 20 minutes. Tap Track Shot to continue.";
+    }
+
+    trackShotLastActivity = 0;
+  }
+}
+
+async function trackShotCapturePosition() {
+  const Geolocation = window.Capacitor?.Plugins?.Geolocation;
+
+  let position;
+
+  if (Geolocation) {
+    position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000
+    });
+  } else if (navigator.geolocation) {
+    position = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 15000
+      })
+    );
+  } else {
+    throw new Error("GPS is unavailable on this device.");
+  }
+
+  const latitude = Number(position?.coords?.latitude);
+  const longitude = Number(position?.coords?.longitude);
+  const accuracy = Number(position?.coords?.accuracy);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new Error("Could not obtain valid GPS coordinates.");
+  }
+
+  if (!Number.isFinite(accuracy) || accuracy > 20) {
+    throw new Error(
+      "GPS accuracy is too low. Move into an open area and try again."
+    );
+  }
+
+  return { latitude, longitude, accuracy };
+}
+
+async function trackShotBallOnGreen() {
+  if (trackShotSaving) return;
+
+  const rid = Number(currentRoundId);
+  const hole = premiumHoleIndex + 1;
+
+  const status = document.getElementById("trackShotStatus");
+  const button = document.getElementById("trackShotBallOnGreen");
+
+  if (!Number.isInteger(rid) || rid <= 0 || !currentRound) {
+    if (status) status.textContent = "Open a round first.";
+    return;
+  }
+
+  trackShotSaving = true;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Finding GPS…";
+  }
+
+  // ---------------------------------------------------------
+  // BALL ON GREEN — OPEN PUTTS POPUP IMMEDIATELY
+  // ---------------------------------------------------------
+
+  document
+    .getElementById("trackShotPuttsOverlay")
+    ?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "trackShotPuttsOverlay";
+
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 3000000;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+  `;
+
+  const panel = document.createElement("div");
+
+  panel.style.cssText = `
+    width: 100%;
+    max-width: 440px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: #ffffff;
+    color: #172b24;
+    border-radius: 20px;
+    padding: 20px;
+    padding-bottom: calc(
+      20px + env(safe-area-inset-bottom)
+    );
+    box-sizing: border-box;
+  `;
+
+  const heading = document.createElement("div");
+  heading.textContent = "🟢 Ball on Green";
+
+  heading.style.cssText = `
+    font-size: 20px;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 8px;
+  `;
+
+  const description = document.createElement("div");
+  description.textContent = "How many putts did you take?";
+
+  description.style.cssText = `
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 12px;
+  `;
+
+  const saveMessage = document.createElement("div");
+  saveMessage.textContent = "Saving green position…";
+
+  saveMessage.style.cssText = `
+    font-size: 13px;
+    text-align: center;
+    color: #64756e;
+    margin-bottom: 14px;
+  `;
+
+  const options = document.createElement("div");
+
+  options.style.cssText = `
+    display: grid;
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  `;
+
+  let greenReady = false;
+  let selectedPutts = null;
+  let pickerClosed = false;
+  let greenSaveFailed = false;
+  let applyingPutts = false;
+
+  const sameHole = () => {
+    return (
+      Number(currentRoundId) === rid &&
+      premiumHoleIndex + 1 === hole
+    );
+  };
+
+  const closePicker = () => {
+    pickerClosed = true;
+    overlay.remove();
+  };
+
+  // ---------------------------------------------------------
+  // APPLY PUTTS USING EXISTING SCORECARD HANDLER
+  // ---------------------------------------------------------
+
+  const applyPutts = async () => {
+    if (
+      !greenReady ||
+      selectedPutts === null ||
+      pickerClosed ||
+      greenSaveFailed ||
+      applyingPutts
+    ) {
+      return;
+    }
+
+    if (!sameHole()) {
+      closePicker();
+      return;
+    }
+
+    applyingPutts = true;
+
+    try {
+      // Allow any scorecard rendering to settle.
+      for (let attempt = 0; attempt < 20; attempt++) {
+        if (pickerClosed || !sameHole()) {
+          return;
+        }
+
+        const currentWheel =
+          document.getElementById("premPuttsWheel");
+
+        if (
+          currentWheel &&
+          currentWheel.isConnected &&
+          !premiumScoreEditBusy
+        ) {
+          const matchingOption = Array.from(
+            currentWheel.options || []
+          ).some(option => option.value === String(selectedPutts));
+
+          if (!matchingOption) {
+            saveMessage.textContent =
+              "Unable to match putts on the scorecard. Please enter them manually.";
+            saveMessage.style.color = "#b42318";
+            return;
+          }
+
+          currentWheel.value = String(selectedPutts);
+
+          // Use the scorecard's existing change/save handler.
+          currentWheel.dispatchEvent(
+            new Event("change", {
+              bubbles: true
+            })
+          );
+
+          closePicker();
+          return;
+        }
+
+        await new Promise(resolve =>
+          setTimeout(resolve, 100)
+        );
+      }
+
+      saveMessage.textContent =
+        "Scorecard not ready. Please enter putts on the scorecard.";
+
+      saveMessage.style.color = "#b42318";
+
+    } finally {
+      applyingPutts = false;
+    }
+  };
+
+  // ---------------------------------------------------------
+  // PUTTS OPTIONS — 0 TO 10
+  // ---------------------------------------------------------
+
+  for (let putts = 0; putts <= 10; putts++) {
+    const option = document.createElement("button");
+    option.type = "button";
+
+    option.textContent =
+      putts === 0
+        ? "Chipped in"
+        : String(putts);
+
+    option.style.cssText = `
+      min-height: 56px;
+      border-radius: 12px;
+      border: 1px solid #d4ded9;
+      background: #f3f7f5;
+      color: #172b24;
+      font-size: ${putts === 0 ? "13px" : "22px"};
+      font-weight: 800;
+      cursor: pointer;
+    `;
+
+    option.addEventListener("click", () => {
+      if (pickerClosed || greenSaveFailed) {
+        return;
+      }
+
+      if (!sameHole()) {
+        closePicker();
+        return;
+      }
+
+      selectedPutts = putts;
+
+      // Visually highlight the selected option.
+      options.querySelectorAll("button").forEach(btn => {
+        btn.style.background = "#f3f7f5";
+        btn.style.color = "#172b24";
+        btn.style.borderColor = "#d4ded9";
+      });
+
+      option.style.background = "#00796b";
+      option.style.color = "#ffffff";
+      option.style.borderColor = "#00796b";
+
+      if (!greenReady) {
+        saveMessage.textContent =
+          `Selected ${putts} putts. Saving green position…`;
+        return;
+      }
+
+      applyPutts();
+    });
+
+    options.appendChild(option);
+  }
+
+  // ---------------------------------------------------------
+  // ENTER PUTTS LATER
+  // ---------------------------------------------------------
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Enter putts later";
+
+  cancel.style.cssText = `
+    width: 100%;
+    margin-top: 14px;
+    min-height: 46px;
+    border: 0;
+    border-radius: 12px;
+    background: #e8eeeb;
+    color: #172b24;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  `;
+
+  cancel.addEventListener("click", closePicker);
+
+  // Assemble and display the popup immediately.
+  panel.appendChild(heading);
+  panel.appendChild(description);
+  panel.appendChild(saveMessage);
+  panel.appendChild(options);
+  panel.appendChild(cancel);
+
+  overlay.appendChild(panel);
+
+// Attach popup inside the active fullscreen element
+// so it appears above the GPS map.
+const fullscreenContainer =
+  document.fullscreenElement ||
+  document.webkitFullscreenElement ||
+  document.querySelector(
+    "#gpsMapCard.gpsMapFullscreen, #gpsMapCard.fullscreen"
+  );
+
+const popupParent =
+  fullscreenContainer || document.body;
+
+popupParent.appendChild(overlay);
+
+  // ---------------------------------------------------------
+  // EXISTING GPS AND DATABASE SAVE
+  // ---------------------------------------------------------
+
+  try {
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    const shots = (response?.shots || []).filter(
+      s => Number(s.hole_number) === hole
+    );
+
+    if (!shots.length) {
+      throw new Error(
+        "Track at least one shot before marking Ball on Green."
+      );
+    }
+
+    const last = shots[shots.length - 1];
+
+    const position = await trackShotCapturePosition();
+
+    if (!sameHole()) {
+      throw new Error("Round or hole changed. Try again.");
+    }
+
+    const distance = trackShotDistanceMetres(last, position);
+
+    // Save the green position to TeeRadar's database.
+    const savedGreen = await api(
+      `/api/rounds/${rid}/shot-green/${hole}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          shot_id: Number(last.id),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          distance
+        })
+      }
+    );
+
+    if (!savedGreen?.ok || !savedGreen?.green) {
+      throw new Error(
+        "The green position could not be saved."
+      );
+    }
+
+    // Do not update the currently displayed hole
+    // if the golfer has navigated elsewhere.
+    if (!sameHole()) {
+      closePicker();
+      return;
+    }
+
+    // Keep a local copy for immediate map rendering.
+    localStorage.setItem(
+      trackShotGreenKey(rid, hole),
+      JSON.stringify({
+        shotId: Number(savedGreen.green.shot_id),
+        latitude: Number(savedGreen.green.latitude),
+        longitude: Number(savedGreen.green.longitude),
+        distance: Number(savedGreen.green.distance),
+        recordedAt: Date.now()
+      })
+    );
+
+    trackShotLastActivity = Date.now();
+
+    if (status) {
+      status.textContent =
+        `✓ Ball on green. Last shot: ${distance} m.`;
+    }
+
+    // Refresh existing shot markers and history.
+    await trackShotRefresh();
+
+    if (!sameHole()) {
+      closePicker();
+      return;
+    }
+
+    greenReady = true;
+
+    if (!pickerClosed) {
+      saveMessage.textContent = "✓ Green position saved";
+      saveMessage.style.color = "#00796b";
+    }
+
+    // If putts were selected while GPS was saving,
+    // apply the selection now.
+    if (selectedPutts !== null && !pickerClosed) {
+      await applyPutts();
+    }
+
+    if (status) {
+      status.textContent =
+        "✓ Ball on Green saved. Select your putts.";
+    }
+
+  } catch (error) {
+    greenSaveFailed = true;
+
+    const message =
+      error?.message || "Unknown error";
+
+    if (status) {
+      status.textContent =
+        "Ball on Green not saved: " + message;
+    }
+
+    if (!pickerClosed) {
+      saveMessage.textContent =
+        "Could not save green: " + message;
+
+      saveMessage.style.color = "#b42318";
+
+      // Disable putts selection if saving failed.
+      options.querySelectorAll("button").forEach(option => {
+        option.disabled = true;
+        option.style.opacity = "0.45";
+      });
+    }
+
+  } finally {
+    trackShotSaving = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "🟢 Ball on Green";
+    }
+  }
+}
+
+// ---------------------------------------------------------
+// BALL ON GREEN BUTTON LISTENER
+// ---------------------------------------------------------
+
+
+document.addEventListener("click", event => {
+  if (
+    event.target?.closest?.(
+      "#trackShotBallOnGreen, #gpsMapBallOnGreenBtn"
+    )
+  ) {
+    trackShotBallOnGreen();
+  }
+});
+
+
+
+    // =========================================================
+// TEERADAR — SHOT TRACKING MAP
+// Separate from Measure Point and live GPS.
+// =========================================================
+
+function renderTrackedShotsOnMap() {
+  if (!gpsMap || !window.L) return;
+
+  // Remove only our own shot-tracking graphics.
+  if (gpsTrackedShotsLayer) {
+    gpsTrackedShotsLayer.clearLayers();
+  } else {
+    gpsTrackedShotsLayer = window.L.layerGroup()
+      .addTo(gpsMap);
+  }
+
+  const roundId = Number(currentRoundId);
+  const holeNumber = premiumHoleIndex + 1;
+  const key = `${roundId}:${holeNumber}`;
+
+  if (
+    !currentRound ||
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    trackShotHistoryKey !== key
+  ) {
+    return;
+  }
+
+  const shots = Array.isArray(trackShotHistory)
+    ? trackShotHistory.filter(shot =>
+        Number(shot.hole_number) === holeNumber &&
+        Number.isFinite(Number(shot.latitude)) &&
+        Number.isFinite(Number(shot.longitude))
+      )
+    : [];
+
+  const green = trackShotGetGreen(roundId, holeNumber);
+
+  const points = shots.map(shot => ({
+    lat: Number(shot.latitude),
+    lng: Number(shot.longitude),
+    club: String(shot.club || "").trim(),
+    type: "shot"
+  }));
+
+  if (
+    green &&
+    Number.isFinite(Number(green.latitude)) &&
+    Number.isFinite(Number(green.longitude)) &&
+    shots.length &&
+    String(green.shotId) === String(shots[shots.length - 1].id)
+  ) {
+    points.push({
+      lat: Number(green.latitude),
+      lng: Number(green.longitude),
+      type: "green"
+    });
+  }
+
+  function clubLabel(club, index) {
+    const value = String(club || "").trim();
+
+    if (!value) return String(index + 1);
+
+    const lower = value.toLowerCase();
+
+    if (lower === "driver") return "Dr";
+    if (lower === "putter") return "Pt";
+
+    const iron = lower.match(/^(\d+)\s*[- ]?\s*iron$/);
+    if (iron) return `${iron[1]}i`;
+
+    const wood = lower.match(/^(\d+)\s*[- ]?\s*wood$/);
+    if (wood) return `${wood[1]}w`;
+
+    const hybrid = lower.match(/^(\d+)\s*[- ]?\s*hybrid$/);
+    if (hybrid) return `${hybrid[1]}h`;
+
+    const wedge = {
+      "pitching wedge": "Pw",
+      "gap wedge": "Gw",
+      "sand wedge": "Sw",
+      "lob wedge": "Lw"
+    };
+
+    if (wedge[lower]) return wedge[lower];
+
+    return value.slice(0, 3);
+  }
+
+  function makeIcon(point, index) {
+    const isGreen = point.type === "green";
+
+    const label = isGreen
+      ? "⚑"
+      : clubLabel(point.club, index);
+
+    const background = isGreen
+      ? "#e7b83e"
+      : "#007e72";
+
+    const foreground = isGreen
+      ? "#5b4300"
+      : "#ffffff";
+
+    const safeLabel = String(label)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+    return window.L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:38px;
+          height:38px;
+          box-sizing:border-box;
+          border-radius:50%;
+          border:4px solid white;
+          background:${background};
+          color:${foreground};
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:${isGreen ? 23 : 12}px;
+          font-weight:800;
+          box-shadow:0 2px 7px rgba(0,0,0,.35);
+          white-space:nowrap;
+        ">${safeLabel}</div>
+      `,
+      iconSize: [38, 38],
+      iconAnchor: [19, 19]
+    });
+  }
+
+  points.forEach((point, index) => {
+    window.L.marker(
+      [point.lat, point.lng],
+      {
+        icon: makeIcon(point, index),
+        zIndexOffset: 500
+      }
+    ).addTo(gpsTrackedShotsLayer);
+
+    if (index === 0) return;
+
+    const previous = points[index - 1];
+
+    window.L.polyline(
+      [
+        [previous.lat, previous.lng],
+        [point.lat, point.lng]
+      ],
+      {
+        color: "#1487dc",
+        weight: 4,
+        opacity: 0.95
+      }
+    ).addTo(gpsTrackedShotsLayer);
+
+    const distance = trackShotDistanceMetres(
+      {
+        latitude: previous.lat,
+        longitude: previous.lng
+      },
+      {
+        latitude: point.lat,
+        longitude: point.lng
+      }
+    );
+
+    // Place the distance halfway along the shot line.
+    const midpoint = [
+      (previous.lat + point.lat) / 2,
+      (previous.lng + point.lng) / 2
+    ];
+
+    const distanceIcon = window.L.divIcon({
+      className: "",
+      html: `
+        <div class="gpsDistanceMapLabel">
+          ${distance}m
+        </div>
+      `,
+      iconSize: [64, 30],
+      iconAnchor: [32, 15]
+    });
+
+    window.L.marker(midpoint, {
+      icon: distanceIcon,
+      interactive: false,
+      zIndexOffset: 550
+    }).addTo(gpsTrackedShotsLayer);
+  });
+}
+
+async function trackShotRefresh() {
+  const rid = Number(currentRoundId);
+  const hole = premiumHoleIndex + 1;
+
+  const summary = document.getElementById("trackShotSummary");
+  const history = document.getElementById("trackShotHistory");
+
+  if (!Number.isInteger(rid) || rid <= 0 || !currentRound) {
+    if (history) history.replaceChildren();
+    return;
+  }
+
+  const key = `${rid}:${hole}`;
+  trackShotHistoryKey = key;
+
+  try {
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    if (
+      trackShotHistoryKey !== key ||
+      Number(currentRoundId) !== rid ||
+      premiumHoleIndex + 1 !== hole
+    ) {
+      return;
+    }
+
+    trackShotHistory = Array.isArray(response?.shots)
+      ? response.shots.filter(
+          s => Number(s.hole_number) === hole
+        )
+      : [];
+
+    if (summary) {
+      summary.textContent =
+        `Your tracked shots on hole ${hole}: ${trackShotHistory.length}. ` +
+        "Manual strokes and putts remain editable.";
+    }
+
+        // Load the saved Ball on Green position from TeeRadar.
+    const greenResponse = await api(
+      `/api/rounds/${rid}/shot-green/${hole}`
+    );
+
+    // Ignore responses if the golfer has switched holes.
+    if (
+      trackShotHistoryKey !== key ||
+      Number(currentRoundId) !== rid ||
+      premiumHoleIndex + 1 !== hole
+    ) {
+      return;
+    }
+
+    if (!greenResponse?.ok) {
+      throw new Error(
+        "Could not load the saved green position."
+      );
+    }
+
+    if (greenResponse.green) {
+      const saved = greenResponse.green;
+
+      localStorage.setItem(
+        trackShotGreenKey(rid, hole),
+        JSON.stringify({
+          shotId: Number(saved.shot_id),
+          latitude: Number(saved.latitude),
+          longitude: Number(saved.longitude),
+          distance: saved.distance == null
+            ? null
+            : Number(saved.distance),
+          recordedAt: saved.recorded_at || Date.now()
+        })
+      );
+    } else {
+      localStorage.removeItem(
+        trackShotGreenKey(rid, hole)
+      );
+    }
+
+    const green = trackShotGetGreen(rid, hole);
+const greenPrompt = document.getElementById("trackShotGreenPrompt");
+
+if (greenPrompt) {
+  greenPrompt.style.display = green ? "block" : "none";
+
+  greenPrompt.textContent = green
+    ? `🟢 Ball on Green recorded. Final tracked shot: ${green.distance} m. Enter your putts using the normal scorecard.`
+    : "";
+}
+
+        // Update shot markers, lines and distance labels.
+    renderTrackedShotsOnMap();
+
+    if (!history) return;
+
+    history.replaceChildren();
+
+    for (const [index, shot] of trackShotHistory.entries()) {
+      const line = document.createElement("div");
+      line.style.cssText =
+        "display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:6px 0";
+
+      const name = document.createElement("span");
+
+const nextShot = trackShotHistory[index + 1];
+const green = trackShotGetGreen(rid, hole);
+
+const end =
+  nextShot || (green?.shotId === shot.id ? green : null);
+
+const metres = end
+  ? ` • ${trackShotDistanceMetres(shot, end)} m`
+  : " • awaiting next position";
+
+name.textContent =
+  `Shot ${index + 1}: ${shot.club || "Club not selected"}${metres}`;
+
+      line.appendChild(name);
+
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Edit club";
+      edit.className = "btn2 secondary";
+      edit.style.cssText =
+        "min-height:30px;padding:4px 8px;font-size:11px";
+
+      edit.onclick = async () => {
+        const value = prompt(
+          "Change club for this shot (leave blank for none):",
+          shot.club || ""
+        );
+
+        if (value === null) return;
+
+        if (value.trim().length > 60) {
+          alert("Club name is too long.");
+          return;
+        }
+
+        try {
+          await api(`/api/rounds/${rid}/shots/${shot.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              club: value.trim() || null
+            })
+          });
+
+          await trackShotRefresh();
+        } catch (e) {
+          alert("Could not edit shot: " + e.message);
+        }
+      };
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Undo";
+      remove.className = "btn2 secondary";
+      remove.style.cssText =
+        "min-height:30px;padding:4px 8px;font-size:11px";
+
+      remove.onclick = async () => {
+        if (
+          !confirm(
+            "Remove this tracked shot? This will not change the manual scorecard."
+          )
+        ) {
+          return;
+        }
+
+        try {
+          await api(`/api/rounds/${rid}/shots/${shot.id}`, {
+            method: "DELETE"
+          });
+
+          await trackShotRefresh();
+        } catch (e) {
+          alert("Could not remove shot: " + e.message);
+        }
+      };
+
+      line.append(edit, remove);
+      history.appendChild(line);
+    }
+  } catch (e) {
+    if (summary && trackShotHistoryKey === key) {
+      summary.textContent =
+        "Shot history unavailable: " + e.message;
+    }
+  }
+}
+
+setInterval(trackShotCheckIdle, 60 * 1000);
+
+
+// ---------------------------------------------------------
+// TeeRadar — Calculate total strokes from shots + putts
+// Only applies after Ball on Green has been recorded.
+// ---------------------------------------------------------
+async function calculateTrackedHoleStrokes(
+  roundId,
+  holeNumber,
+  putts
+) {
+  if (
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    !Number.isInteger(holeNumber) ||
+    holeNumber <= 0 ||
+    !Number.isInteger(putts) ||
+    putts < 0
+  ) {
+    return null;
+  }
+
+  const green = trackShotGetGreen(
+    roundId,
+    holeNumber
+  );
+
+  // Manual scoring remains unchanged if tracking
+  // has not been completed for this hole.
+  if (!green) {
+    return null;
+  }
+
+  const response = await api(
+    `/api/rounds/${roundId}/shots`
+  );
+
+  if (!response?.ok || !Array.isArray(response.shots)) {
+    throw new Error(
+      "Could not verify tracked shots."
+    );
+  }
+
+  const shots = response.shots.filter(
+    shot =>
+      Number(shot.hole_number) === holeNumber
+  );
+
+  if (!shots.length) {
+    return null;
+  }
+
+  // Make sure Ball on Green still refers
+  // to the most recently recorded shot.
+  const lastShot = shots[shots.length - 1];
+
+  if (
+    String(lastShot.id) !== String(green.shotId)
+  ) {
+    return null;
+  }
+
+  return shots.length + putts;
+}
+
+    function promptTrackShotClub() {
+  return new Promise((resolve) => {
+    const existingSelect =
+      document.getElementById("trackShotClub");
+
+    const parent =
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.body;
+
+    const overlay = document.createElement("div");
+
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    `;
+
+    const panel = document.createElement("div");
+
+    panel.style.cssText = `
+      background: white;
+      color: #10262b;
+      border-radius: 18px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+      display: grid;
+      gap: 14px;
+    `;
+
+    const title = document.createElement("h3");
+    title.textContent = "Which club are you using?";
+    title.style.margin = "0";
+
+    const select = document.createElement("select");
+    select.className = "input";
+    select.style.cssText = `
+      width: 100%;
+      min-height: 48px;
+      font-size: 16px;
+    `;
+
+    if (existingSelect) {
+      select.innerHTML = existingSelect.innerHTML;
+    } else {
+      select.innerHTML =
+        '<option value="">No club selected</option>';
+    }
+
+    select.value = "";
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "📍 Save Shot";
+    save.style.cssText = `
+      background: #007d70;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+    `;
+
+    const skip = document.createElement("button");
+    skip.type = "button";
+    skip.textContent = "Skip Club";
+    skip.style.cssText = `
+      background: #e6f4f1;
+      color: #006b60;
+      border: none;
+      border-radius: 12px;
+      padding: 12px;
+      font-weight: bold;
+    `;
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.style.cssText = `
+      background: transparent;
+      border: none;
+      padding: 10px;
+      color: #64748b;
+    `;
+
+    function finish(value) {
+      overlay.remove();
+      resolve(value);
+    }
+
+    save.addEventListener("click", () => {
+      finish(select.value);
+    });
+
+    skip.addEventListener("click", () => {
+      finish("");
+    });
+
+    cancel.addEventListener("click", () => {
+      finish(null);
+    });
+
+    panel.append(
+      title,
+      select,
+      save,
+      skip,
+      cancel
+    );
+
+    overlay.appendChild(panel);
+    parent.appendChild(overlay);
+  });
+}
+
+async function saveTrackedShot() {
+  const button = document.getElementById(
+    "trackShotBtn"
+  );
+
+  const clubSelect = document.getElementById(
+    "trackShotClub"
+  );
+
+  const status = document.getElementById(
+    "trackShotStatus"
+  );
+
+  if (trackShotSaving) return;
+  trackShotCheckIdle();
+
+  const roundId = Number(currentRoundId);
+
+  if (
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    !currentRound
+  ) {
+    if (status) {
+      status.textContent = "Open a round first.";
+    }
+    return;
+  }
+
+  const holeNumber = premiumHoleIndex + 1;
+
+  const totalHoles =
+    Number(currentRound.holes) || 18;
+
+  if (
+    holeNumber < 1 ||
+    holeNumber > totalHoles
+  ) {
+    if (status) {
+      status.textContent = "Invalid hole.";
+    }
+    return;
+  }
+
+    // Prevent another shot from starting while
+  // the golfer is selecting a club.
+  trackShotSaving = true;
+
+  // Ask for the club before capturing GPS.
+  const club = await promptTrackShotClub();
+
+  // Cancel means no shot is recorded.
+  if (club === null) {
+    trackShotSaving = false;
+    return;
+  }
+
+  const Geolocation =
+    window.Capacitor?.Plugins?.Geolocation;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Finding GPS…";
+  }
+
+  if (status) {
+    status.textContent = "Capturing shot location…";
+  }
+
+  try {
+    let latitude;
+    let longitude;
+    let accuracy;
+
+    // Get a fresh location at the time of the shot.
+    if (Geolocation) {
+      const position =
+        await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 15000
+        });
+
+      latitude = Number(
+        position?.coords?.latitude
+      );
+
+      longitude = Number(
+        position?.coords?.longitude
+      );
+
+      accuracy = Number(
+        position?.coords?.accuracy
+      );
+    } else if (navigator.geolocation) {
+      const position = await new Promise(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            reject,
+            {
+              enableHighAccuracy: true,
+              maximumAge: 5000,
+              timeout: 15000
+            }
+          );
+        }
+      );
+
+      latitude = Number(
+        position.coords.latitude
+      );
+
+      longitude = Number(
+        position.coords.longitude
+      );
+
+      accuracy = Number(
+        position.coords.accuracy
+      );
+    } else {
+      throw new Error(
+        "GPS is unavailable on this device."
+      );
+    }
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new Error(
+        "Could not obtain valid GPS coordinates."
+      );
+    }
+
+    // Avoid recording inaccurate shot positions.
+    if (
+      !Number.isFinite(accuracy) ||
+      accuracy > 20
+    ) {
+      throw new Error(
+        "GPS accuracy is too low. Move into an open area and try again."
+      );
+    }
+
+    // Do not save a shot to a different round/hole
+    // if the golfer navigated while GPS was loading.
+    if (
+      Number(currentRoundId) !== roundId ||
+      premiumHoleIndex + 1 !== holeNumber
+    ) {
+      throw new Error(
+        "Round or hole changed. Please track the shot again."
+      );
+    }
+
+    if (status) {
+      status.textContent = "Saving shot…";
+    }
+
+    const result = await api(
+      `/api/rounds/${roundId}/shots`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          hole_number: holeNumber,
+          latitude,
+          longitude,
+          club: club || null
+        })
+      }
+    );
+
+    if (!result?.ok || !result?.shot) {
+      throw new Error(
+        "Shot was not confirmed by the server."
+      );
+    }
+
+        if (status) {
+      status.textContent =
+        `✓ Shot saved — Hole ${holeNumber}` +
+        (club ? ` • ${club}` : "");
+    }
+
+        // A new shot means the previous Ball on Green
+    // position is no longer the end of this hole.
+    try {
+      await api(
+        `/api/rounds/${roundId}/shot-green/${holeNumber}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      localStorage.removeItem(
+        trackShotGreenKey(roundId, holeNumber)
+      );
+    } catch (greenError) {
+      console.warn(
+        "Could not clear previous green marker:",
+        greenError
+      );
+    }
+
+    // ---------------------------------------------------------
+    // Track Shot — successful activity update
+    // ---------------------------------------------------------
+    // Only reset the inactivity timer after the backend
+    // confirms the shot was saved.
+    trackShotLastActivity = Date.now();
+
+    // Refresh this golfer's shot history and shot count.
+    await trackShotRefresh();
+
+    console.log(
+      "✅ TeeRadar shot saved:",
+      result.shot
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ TeeRadar shot tracking failed:",
+      error
+    );
+
+    if (status) {
+      status.textContent =
+        "Shot not saved: " +
+        (error?.message || "Unknown error");
+    }
+
+  } finally {
+    trackShotSaving = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "📍 Track Shot";
+    }
+  }
+}
+
+// Event delegation allows the button to keep working
+// even if the scorecard is rendered again.
+
+
+document.addEventListener(
+  "click",
+  (event) => {
+    if (
+      event.target?.closest?.(
+        "#trackShotBtn, #gpsMapTrackShotBtn"
+      )
+    ) {
+      saveTrackedShot();
+    }
+  }
+);
+
+
 // ---------------------------------------------------------
 // TeeRadar GPS accuracy and jump protection
 // ---------------------------------------------------------
@@ -4553,6 +6573,464 @@ let providerGpsGreens = [];
 let providerGpsLoading = false;
 let providerGpsLoadedForRoundId = null;
 
+// =========================================================
+// TEERADAR — ADMIN TEE COORDINATE EDITOR
+// =========================================================
+
+// Saved tee coordinates loaded from the TeeRadar backend.
+let teeAdminSavedPoints = [];
+
+// Whether the admin is currently editing tee locations.
+let teeAdminEditing = false;
+
+// Currently selected tee type: front or back.
+let teeAdminSelectedType = "front";
+
+// Temporary GPS point selected by tapping the satellite map.
+// This is not saved until the admin presses Save.
+let teeAdminPendingPoint = null;
+
+// Leaflet marker showing the selected tee position.
+let teeAdminPreviewMarker = null;
+
+// Leaflet layer containing saved tee markers.
+let teeAdminSavedLayer = null;
+
+// Prevent multiple simultaneous save/delete requests.
+let teeAdminSaving = false;
+
+    // =========================================================
+// TEERADAR — ADMIN TEE EDITOR CONTROLS
+// =========================================================
+
+function teeAdminCurrentHole() {
+  return Number(premiumHoleIndex) + 1;
+}
+
+function teeAdminSetStatus(message) {
+  const status = document.getElementById("teeEditStatus");
+
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function teeAdminClearPreview() {
+  teeAdminPendingPoint = null;
+
+  if (teeAdminPreviewMarker) {
+    teeAdminPreviewMarker.remove();
+    teeAdminPreviewMarker = null;
+  }
+
+  const saveButton = document.getElementById("teeSaveBtn");
+
+  if (saveButton) {
+    saveButton.disabled = true;
+  }
+}
+
+function teeAdminSetBusy(busy) {
+  teeAdminSaving = busy;
+
+  const saveButton = document.getElementById("teeSaveBtn");
+  const deleteButton = document.getElementById("teeDeleteBtn");
+
+  if (saveButton) {
+    saveButton.disabled = busy || !teeAdminPendingPoint;
+  }
+
+  if (deleteButton) {
+    deleteButton.disabled = busy;
+  }
+}
+
+async function teeAdminSavePoint() {
+  if (teeAdminSaving) return;
+
+  const courseId = providerGpsCourseId;
+  const hole = teeAdminCurrentHole();
+  const teeType = teeAdminSelectedType;
+  const point = teeAdminPendingPoint;
+
+  if (!courseId || !Number.isInteger(hole) || hole < 1 || hole > 36) {
+    teeAdminSetStatus("No valid course or hole selected.");
+    return;
+  }
+
+  if (!point) {
+    teeAdminSetStatus("Tap the map to select a tee position first.");
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSetStatus("Please log in again.");
+    return;
+  }
+
+  teeAdminSetBusy(true);
+  teeAdminSetStatus("Saving tee coordinates...");
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees/${hole}/${teeType}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          lat: point.latitude,
+          lng: point.longitude
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || `Save failed (${response.status})`);
+    }
+
+    teeAdminSavedPoints = teeAdminSavedPoints.filter(
+      item =>
+        !(
+          Number(item.hole_number) === hole &&
+          item.tee_type === teeType
+        )
+    );
+
+    teeAdminSavedPoints.push({
+      hole_number: hole,
+      tee_type: teeType,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      source: "admin_manual"
+    });
+
+        teeAdminClearPreview();
+
+    // Refresh the GPS map using the newly saved tee.
+    if (hole === premiumHoleIndex + 1) {
+      focusGpsMapOnCurrentHole(true);
+    }
+
+    teeAdminSetStatus(
+      `${teeType === "front" ? "Front" : "Back"} tee saved for hole ${hole}.`
+    );
+
+    console.log("✅ TeeRadar tee saved", {
+      courseId,
+      hole,
+      teeType
+    });
+
+  } catch (error) {
+    console.error("Tee save failed:", error);
+    teeAdminSetStatus(`Save failed: ${error.message}`);
+  } finally {
+    teeAdminSetBusy(false);
+  }
+}
+
+async function teeAdminDeletePoint() {
+  if (teeAdminSaving) return;
+
+  const courseId = providerGpsCourseId;
+  const hole = teeAdminCurrentHole();
+  const teeType = teeAdminSelectedType;
+
+  if (!courseId || !Number.isInteger(hole) || hole < 1 || hole > 36) {
+    teeAdminSetStatus("No valid course or hole selected.");
+    return;
+  }
+
+  if (!window.confirm(
+    `Delete the saved ${teeType} tee for hole ${hole}?`
+  )) {
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSetStatus("Please log in again.");
+    return;
+  }
+
+  teeAdminSetBusy(true);
+  teeAdminSetStatus("Deleting saved tee...");
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees/${hole}/${teeType}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || `Delete failed (${response.status})`);
+    }
+
+    teeAdminSavedPoints = teeAdminSavedPoints.filter(
+      item =>
+        !(
+          Number(item.hole_number) === hole &&
+          item.tee_type === teeType
+        )
+    );
+
+    teeAdminClearPreview();
+    // Refresh the GPS map after deleting the tee coordinate.
+if (hole === premiumHoleIndex + 1) {
+  focusGpsMapOnCurrentHole(true);
+}
+
+    teeAdminSetStatus(
+      data.deleted
+        ? `${teeType === "front" ? "Front" : "Back"} tee deleted for hole ${hole}.`
+        : "No saved tee found for this hole."
+    );
+
+  } catch (error) {
+    console.error("Tee delete failed:", error);
+    teeAdminSetStatus(`Delete failed: ${error.message}`);
+  } finally {
+    teeAdminSetBusy(false);
+  }
+}
+
+    // =========================================================
+// TEERADAR — LOAD SAVED TEE COORDINATES
+// =========================================================
+
+async function teeAdminLoadSavedPoints() {
+  const courseId = providerGpsCourseId;
+
+  if (!courseId) {
+    teeAdminSavedPoints = [];
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSavedPoints = [];
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error || `Unable to load tees (${response.status})`
+      );
+    }
+
+    // Prevent an earlier course request overwriting a newer one.
+    if (String(providerGpsCourseId) !== String(courseId)) {
+      return;
+    }
+
+    teeAdminSavedPoints = Array.isArray(data.tees)
+      ? data.tees
+      : [];
+
+    console.log(
+      "✅ TeeRadar saved tee coordinates loaded:",
+      teeAdminSavedPoints.length
+    );
+
+  } catch (error) {
+    console.error(
+      "Unable to load saved TeeRadar tee coordinates:",
+      error
+    );
+  }
+}
+
+function teeAdminGetSavedPoint(hole, teeType) {
+  const item = teeAdminSavedPoints.find(
+    tee =>
+      Number(tee.hole_number) === Number(hole) &&
+      tee.tee_type === teeType
+  );
+
+  if (!item) return null;
+
+  const lat = Number(item.latitude);
+  const lng = Number(item.longitude);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180
+  ) {
+    return null;
+  }
+
+  return { lat, lng };
+}
+function teeAdminInitialiseControls() {
+  const panel = document.getElementById("teeAdminPanel");
+  const toggle = document.getElementById("teeEditToggle");
+  const controls = document.getElementById("teeEditControls");
+  const typeSelect = document.getElementById("teeEditType");
+  const saveButton = document.getElementById("teeSaveBtn");
+  const deleteButton = document.getElementById("teeDeleteBtn");
+
+  if (!panel || !toggle || !controls || !typeSelect ||
+      !saveButton || !deleteButton) {
+    return;
+  }
+
+  const user = decodeJwtPayload(getToken());
+
+  const isAdmin =
+    String(user?.email || "").trim().toLowerCase() ===
+    "declan7pin@gmail.com";
+
+  if (!isAdmin) {
+    panel.style.display = "none";
+    document.getElementById("gpsMapAdminTeeBtn")?.remove();
+    return;
+  }
+
+  panel.style.display = "";
+
+  // Add an admin-only tee editing button to the GPS map.
+  const shotActions = document.getElementById("gpsMapShotActions");
+
+  if (
+    shotActions &&
+    !document.getElementById("gpsMapAdminTeeBtn")
+  ) {
+    const teeButton = document.createElement("button");
+
+    teeButton.id = "gpsMapAdminTeeBtn";
+    teeButton.type = "button";
+    teeButton.textContent = "📍 Set Tee Location";
+
+    teeButton.style.cssText = `
+      background: #ffffff !important;
+      color: #10262b !important;
+      border: 1px solid #d4ded9 !important;
+    `;
+
+    teeButton.addEventListener("click", async () => {
+
+  // Start editing the tee location.
+  if (!teeAdminEditing) {
+    toggle.click();
+    return;
+  }
+
+  // Prevent duplicate saves.
+  if (teeAdminSaving) return;
+
+  // Require a tee position before saving.
+  if (!teeAdminPendingPoint) {
+    teeAdminSetStatus(
+      "Tap the map to select a tee location first."
+    );
+    return;
+  }
+
+  teeButton.disabled = true;
+  teeButton.textContent = "Saving Tee…";
+
+  try {
+    // Save through the existing TeeRadar API.
+    await teeAdminSavePoint();
+
+    // Only finish editing if the save succeeded.
+    // teeAdminSavePoint clears the pending point
+    // after a successful database save.
+    if (!teeAdminPendingPoint) {
+      toggle.click();
+    }
+
+  } finally {
+    teeButton.disabled = false;
+
+    teeButton.textContent = teeAdminEditing
+      ? "✓ Finish Tee Editing"
+      : "📍 Set Tee Location";
+  }
+});
+
+    shotActions.appendChild(teeButton);
+  }
+
+  toggle.addEventListener("click", () => {
+    teeAdminEditing = !teeAdminEditing;
+
+    controls.style.display = teeAdminEditing ? "flex" : "none";
+
+    toggle.textContent = teeAdminEditing
+      ? "✕ Finish editing tees"
+      : "📍 Edit tees";
+
+    teeAdminClearPreview();
+
+    if (teeAdminEditing) {
+      teeAdminSetStatus(
+        `Editing hole ${teeAdminCurrentHole()} — tap the map to position the tee.`
+      );
+    }
+
+    const gpsTeeButton =
+      document.getElementById("gpsMapAdminTeeBtn");
+
+    if (gpsTeeButton) {
+      gpsTeeButton.textContent = teeAdminEditing
+        ? "✓ Finish Tee Editing"
+        : "📍 Set Tee Location";
+    }
+  });
+
+  typeSelect.addEventListener("change", () => {
+    teeAdminSelectedType = typeSelect.value;
+    teeAdminClearPreview();
+
+    teeAdminSetStatus(
+      `Selected ${teeAdminSelectedType} tee — tap the map to position it.`
+    );
+  });
+
+  saveButton.addEventListener("click", teeAdminSavePoint);
+  deleteButton.addEventListener("click", teeAdminDeletePoint);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    teeAdminInitialiseControls,
+    { once: true }
+  );
+} else {
+  teeAdminInitialiseControls();
+}
 /*
  * Leaflet marker for the automatic current-hole green.
  */
@@ -4563,6 +7041,10 @@ let gpsGreenLine = null;
  * GPS map state.
  */
 let gpsMap = null;
+
+// Separate layer for tracked shots.
+// This does not affect Measure Point or the live GPS marker.
+let gpsTrackedShotsLayer = null;
 
 let gpsPlayerMarker = null;
 let gpsAccuracyCircle = null;
@@ -4786,45 +7268,90 @@ function distanceBetweenGpsPoints(
   return Math.round(R * c);
 }
 
-function getCurrentGpsCourse(){
+function getCurrentGpsCourse() {
   if (!currentRound) {
     return null;
   }
 
-  const wantedCourse =
-    String(currentRound.course || "")
-      .trim();
+  const wantedCourse = String(
+    currentRound.course || ""
+  ).trim();
 
-  const wantedState =
-    String(currentRound.state || "")
-      .trim()
-      .toUpperCase();
+  const wantedState = String(
+    currentRound.state || ""
+  ).trim().toUpperCase();
 
-  const wantedHoles =
-    Number(currentRound.holes || 0);
+  const wantedHoles = Number(
+    currentRound.holes || 0
+  );
 
-  /*
-   * First try an exact name/state/hole match.
-   */
-  let match = coursesCache.find((c) => {
+  // Prefer courses that actually have GPS points.
+  const candidates = coursesCache.filter((c) => {
     return (
-      courseNamesMatch(c.name, wantedCourse) &&
       String(c.state || "")
         .trim()
         .toUpperCase() === wantedState &&
-      Number(c.holes) === wantedHoles
+      Number(c.holes) === wantedHoles &&
+      Array.isArray(c.green_points) &&
+      c.green_points.length > 0
     );
   });
 
-  /*
-   * If we're playing 18 holes made from two 9-hole
-   * templates, there may not be a single 18-hole GPS
-   * template.
-   *
-   * We'll handle that separately in the next function.
-   */
-  return match || null;
+  // 1. Existing TeeRadar course-name matching.
+  const exactMatch = candidates.find((c) =>
+    courseNamesMatch(c.name, wantedCourse)
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // 2. Specific fallback for The Springs / Armadale.
+  // These are known names for the same WA golf course.
+  if (wantedState === "WA") {
+    const normalize = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+
+    const wanted = normalize(wantedCourse);
+
+    const isSpringsOrArmadale = (name) => {
+      const value = normalize(name);
+
+      return (
+        value.includes("the springs") ||
+        value.includes("armadale")
+      );
+    };
+
+    if (isSpringsOrArmadale(wanted)) {
+      const fallback = candidates.find((c) =>
+        isSpringsOrArmadale(c.name)
+      );
+
+      if (fallback) {
+        console.log(
+          "✅ TeeRadar using saved Springs/Armadale GPS:",
+          {
+            requested: wantedCourse,
+            matched: fallback.name,
+            holes: fallback.holes,
+            gpsPoints: fallback.green_points.length
+          }
+        );
+
+        return fallback;
+      }
+    }
+  }
+
+  // Keep the existing separate 9-hole layout
+  // fallback in getCurrentHoleGreenPoints().
+  return null;
 }
+
 
 function getCurrentHoleGreenPoints(){
   if (!currentRound) {
@@ -6036,14 +8563,38 @@ function ensureGpsMap() {
   gpsMapEl.textContent = "";
 
   gpsMap =
-    window.L.map(
-      gpsMapEl,
-      {
-        zoomControl: true,
+  window.L.map(
+    gpsMapEl,
+    {
+      zoomControl: true,
 
-        attributionControl: true
-      }
-    );
+      attributionControl: true,
+
+      // Allow exact manual zoom levels
+      // without snapping to fixed increments
+      zoomSnap: 0,
+
+      // Smaller increments for zoom buttons
+      zoomDelta: 0.25,
+
+      // Smoother mouse-wheel zoom
+      wheelPxPerZoomLevel: 120,
+
+      // Enable map rotation
+      rotate: true,
+
+      // Start north-up
+      bearing: 0,
+
+      // Allow two-finger rotation
+      touchRotate: true,
+
+      // Allow Shift + drag rotation on desktop
+      shiftKeyRotate: true
+    }
+  );
+
+
 
   /*
    * Satellite imagery.
@@ -6071,6 +8622,80 @@ gpsMap.on(
       !event ||
       !event.latlng
     ) {
+      return;
+    }
+
+    // =====================================================
+    // ADMIN TEE EDITOR — MAP TAP
+    // =====================================================
+    if (teeAdminEditing) {
+
+      const latitude = Number(event.latlng.lat);
+      const longitude = Number(event.latlng.lng);
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        return;
+      }
+
+      teeAdminPendingPoint = {
+        latitude,
+        longitude
+      };
+
+      // Create or move the preview marker.
+      if (!teeAdminPreviewMarker) {
+
+        const previewIcon = window.L.divIcon({
+          className: "",
+          html:
+            '<div style="' +
+            'width:18px;height:18px;' +
+            'background:#facc15;' +
+            'border:3px solid #fff;' +
+            'border-radius:50%;' +
+            'box-shadow:0 0 8px rgba(0,0,0,.6);' +
+            '"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        teeAdminPreviewMarker = window.L.marker(
+          [latitude, longitude],
+          {
+            icon: previewIcon,
+            zIndexOffset: 1500,
+            interactive: false
+          }
+        ).addTo(gpsMap);
+
+      } else {
+
+        teeAdminPreviewMarker.setLatLng([
+          latitude,
+          longitude
+        ]);
+
+      }
+
+      const saveButton =
+        document.getElementById("teeSaveBtn");
+
+      if (saveButton) {
+        saveButton.disabled = false;
+      }
+
+      const status =
+        document.getElementById("teeEditStatus");
+
+      if (status) {
+        status.textContent =
+          `${teeAdminSelectedType === "front" ? "Front" : "Back"} tee selected — press Save selected point.`;
+      }
+
+      // Prevent the normal distance-measuring action.
       return;
     }
 
@@ -6184,62 +8809,22 @@ const point = [
     150
   );
 
+    // Restore tracked shot markers when the map opens.
+  renderTrackedShotsOnMap();
+
   return gpsMap;
 }
 
 // =========================================================
-// GPS MAP — RECENTER ON PLAYER
+// GPS MAP — RECENTER ON CURRENT HOLE
 // =========================================================
 
 if (gpsRecenterBtn) {
-  gpsRecenterBtn.addEventListener(
-    "click",
-    () => {
-      if (
-        !gpsMap ||
-        !currentGpsPosition
-      ) {
-        return;
-      }
+  gpsRecenterBtn.addEventListener("click", () => {
+    if (!currentRound) return;
 
-      const latitude =
-        Number(
-          currentGpsPosition.latitude
-        );
-
-      const longitude =
-        Number(
-          currentGpsPosition.longitude
-        );
-
-      if (
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        return;
-      }
-
-      gpsMap.setView(
-        [
-          latitude,
-          longitude
-        ],
-        18,
-        {
-          animate: true
-        }
-      );
-
-      setTimeout(
-        () => {
-          try {
-            gpsMap.invalidateSize();
-          } catch (_) {}
-        },
-        100
-      );
-    }
-  );
+    focusGpsMapOnCurrentHole(true);
+  });
 }
 
     // =========================================================
@@ -6449,23 +9034,54 @@ if (
    */
   if (!gpsGreenMarker) {
 
-    const greenIcon =
-      window.L.divIcon({
-        className: "",
+    
+const greenIcon = window.L.divIcon({
+  className: "",
 
-        html:
-          '<div class="gpsGreenMarker"></div>',
+  html: `
+    <div style="
+      position:relative;
+      width:30px;
+      height:38px;
+      pointer-events:none;
+    ">
+      <div style="
+        position:absolute;
+        left:14px;
+        top:4px;
+        width:2px;
+        height:30px;
+        background:#ffffff;
+        box-shadow:0 0 3px #000;
+      "></div>
 
-        iconSize: [
-          28,
-          28
-        ],
+      <div style="
+        position:absolute;
+        left:16px;
+        top:4px;
+        width:19px;
+        height:14px;
+        background:#e5252a;
+        clip-path:polygon(0 0,100% 25%,0 100%);
+        filter:drop-shadow(0 1px 2px #000);
+      "></div>
 
-        iconAnchor: [
-          14,
-          14
-        ]
-      });
+      <div style="
+        position:absolute;
+        left:10px;
+        top:31px;
+        width:10px;
+        height:5px;
+        border-radius:50%;
+        background:#ffffff;
+        box-shadow:0 0 3px #000;
+      "></div>
+    </div>
+  `,
+
+  iconSize: [36, 38],
+  iconAnchor: [15, 36]
+});
 
     gpsGreenMarker =
       window.L.marker(
@@ -6548,6 +9164,448 @@ if (
 }
 
 
+/*
+ * TEERADAR — FOCUS MAP ON SELECTED HOLE
+ *
+ * Works without enabling player GPS.
+ * Does not change the player's GPS marker.
+ */
+let gpsFocusedHoleKey = "";
+
+let gpsFocusRequestId = 0;
+
+
+function focusGpsMapOnCurrentHole(force = false) {
+  const map = ensureGpsMap();
+
+  if (!map || !currentRound || !window.L) return;
+
+  const gps = getBestCurrentHoleGps();
+
+  if (!gps?.middle) return;
+
+  function validPoint(value) {
+    if (!value) return null;
+
+    const point =
+      typeof value === "string"
+        ? parseGoogleEarthCoordinate(value)
+        : value;
+
+    const lat = Number(point?.lat ?? point?.latitude);
+    const lng = Number(point?.lng ?? point?.longitude);
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      return null;
+    }
+
+    return [lat, lng];
+  }
+
+  const green = validPoint(gps.middle);
+
+  if (!green) return;
+
+  const providerHole = getCurrentProviderGreen();
+  console.log(
+  "🗺️ TEERADAR GPS HOLE DIAGNOSTIC",
+  {
+    course: currentRound?.course,
+
+    selectedHole: premiumHoleIndex + 1,
+
+    gpsSource: gps?.source,
+
+    green: gps?.middle,
+
+    providerHoleNumber: providerHole?.hole,
+
+    providerGreen: providerHole?.middle,
+
+    teeFront: providerHole?.teeFront,
+
+    teeBack: providerHole?.teeBack,
+
+    marker100: providerHole?.marker100,
+
+    providerCourseId: providerGpsCourseId,
+
+    providerCourseName: providerGpsCourseName
+  }
+);
+
+    // =====================================================
+  // TEERADAR — HOLE DIRECTION REFERENCE
+  //
+  // Priority:
+  // 1. Provider tee coordinates
+  // 2. 200 m fairway marker
+  // 3. 150 m fairway marker
+  // 4. 100 m fairway marker
+  // 5. Dogleg position
+  //
+  // Markers and doglegs determine direction only.
+  // They are never saved as tee coordinates.
+  // =====================================================
+
+  // =====================================================
+// TEERADAR — TEE COORDINATE PRIORITY
+//
+// 1. Admin-saved back tee
+// 2. Admin-saved front tee
+// 3. GolfAPI back tee
+// 4. GolfAPI front tee
+//
+// If none exist, retain the existing fallback logic.
+// =====================================================
+
+const holeNumber = premiumHoleIndex + 1;
+
+const savedBackTee =
+  teeAdminGetSavedPoint(holeNumber, "back");
+
+const savedFrontTee =
+  teeAdminGetSavedPoint(holeNumber, "front");
+
+const tee =
+  validPoint(savedBackTee) ||
+  validPoint(savedFrontTee) ||
+  validPoint(providerHole?.teeBack) ||
+  validPoint(providerHole?.teeFront);
+
+  const marker200 =
+    validPoint(providerHole?.marker200);
+
+  const marker150 =
+    validPoint(providerHole?.marker150);
+
+  const marker100 =
+    validPoint(providerHole?.marker100);
+
+  const dogleg =
+    validPoint(providerHole?.dogleg);
+
+  const holeDistance =
+    Number(currentPremiumDistances?.[premiumHoleIndex]);
+
+  const publishedLength =
+    Number.isFinite(holeDistance) && holeDistance > 30
+      ? holeDistance
+      : 300;
+
+  let start = tee;
+  let source = tee ? "tee" : "green-only";
+
+  // Estimate a framing start using a known
+  // reference point and the published hole length.
+  function estimateStart(reference, label) {
+    if (!reference) return false;
+
+    const distance =
+      map.distance(reference, green);
+
+    if (
+      !Number.isFinite(distance) ||
+      distance < 15 ||
+      distance > 600
+    ) {
+      return false;
+    }
+
+    const ratio = Math.min(
+      8,
+      Math.max(1, publishedLength / distance)
+    );
+
+    start = [
+      green[0] +
+        (reference[0] - green[0]) * ratio,
+
+      green[1] +
+        (reference[1] - green[1]) * ratio
+    ];
+
+    source = label;
+
+    return true;
+  }
+
+  if (!start) {
+    estimateStart(marker200, "200m-marker") ||
+    estimateStart(marker150, "150m-marker") ||
+    estimateStart(marker100, "100m-marker") ||
+    estimateStart(dogleg, "dogleg");
+  }
+
+  console.log("🧭 TeeRadar hole direction", {
+    hole: premiumHoleIndex + 1,
+    source,
+    estimatedStart: start,
+    green,
+    publishedLength
+  });
+  const key =
+    String(currentRoundId) +
+    ":" +
+    String(premiumHoleIndex);
+
+  if (!force && gpsFocusedHoleKey === key) {
+    return;
+  }
+
+  gpsFocusedHoleKey = key;
+
+  requestAnimationFrame(() => {
+    if (
+      !currentRound ||
+      key !==
+        String(currentRoundId) +
+        ":" +
+        String(premiumHoleIndex)
+    ) {
+      return;
+    }
+
+    map.invalidateSize({ pan: false });
+
+    const size = map.getSize();
+
+    if (!size.x || !size.y) return;
+
+    const topPadding = 55;
+const bottomPadding = 190;
+const sidePadding = 45;
+
+    const usableHeight = Math.max(
+      100,
+      size.y - topPadding - bottomPadding
+    );
+
+    const usableWidth = Math.max(
+      100,
+      size.x - sidePadding * 2
+    );
+
+    // Without a usable start, show the green
+    // using a conservative hole-length estimate.
+    if (!start || map.distance(start, green) < 25) {
+      if (typeof map.setBearing === "function") {
+        map.setBearing(0);
+      }
+
+      const fallbackZoom = Math.max(
+        14,
+        Math.min(
+          19,
+          Math.log2(
+            (156543.03392 *
+              Math.cos(green[0] * Math.PI / 180) *
+              usableHeight) /
+            (publishedLength * 1.3)
+          )
+        )
+      );
+
+      map.setView(green, fallbackZoom, {
+        animate: false
+      });
+
+      return;
+    }
+
+    // Geographic bearing from tee towards green.
+    const startLat = start[0] * Math.PI / 180;
+    const greenLat = green[0] * Math.PI / 180;
+
+    const deltaLng =
+      (green[1] - start[1]) * Math.PI / 180;
+
+    const y =
+      Math.sin(deltaLng) * Math.cos(greenLat);
+
+    const x =
+      Math.cos(startLat) * Math.sin(greenLat) -
+      Math.sin(startLat) *
+      Math.cos(greenLat) *
+      Math.cos(deltaLng);
+
+    const bearing =
+      (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+    // Tested TeeRadar rotation correction.
+    const rotation = (360 - bearing) % 360;
+
+    const canRotate =
+      typeof map.setBearing === "function";
+
+    if (canRotate) {
+      map.setBearing(rotation);
+    }
+
+    const length = map.distance(start, green);
+
+    // Include extra space for fairway width,
+    // doglegs and the tee/green markers.
+        // Allow additional room around the tee and green.
+    // Includes at least 20 m beyond the calculated
+    // hole length for different teeing positions.
+
+    const framingLength = Math.max(
+      length * 1.40,
+      length + 40,
+      100
+    );
+
+    const framingWidth = Math.max(
+      95,
+      length * 0.32
+    );
+
+    const centreLat = (start[0] + green[0]) / 2;
+    const centreLng = (start[1] + green[1]) / 2;
+
+    const metresPerPixelAtZoomZero =
+      156543.03392 *
+      Math.cos(centreLat * Math.PI / 180);
+
+    const zoomByHeight = Math.log2(
+      metresPerPixelAtZoomZero *
+      usableHeight /
+      framingLength
+    );
+
+    const zoomByWidth = Math.log2(
+      metresPerPixelAtZoomZero *
+      usableWidth /
+      framingWidth
+    );
+
+    let zoom = Math.min(
+      zoomByHeight,
+      zoomByWidth,
+      19
+    );
+
+    // Keep normal golf holes at practical
+    // satellite zoom levels.
+    zoom = Math.max(13, zoom);
+
+    // If rotation is unavailable, use the
+    // ordinary unrotated bounds calculation.
+    if (!canRotate) {
+      const bounds = window.L.latLngBounds([
+        start,
+        green
+      ]);
+
+      map.fitBounds(bounds, {
+        paddingTopLeft: [
+          sidePadding,
+          topPadding
+        ],
+        paddingBottomRight: [
+          sidePadding,
+          bottomPadding
+        ],
+        maxZoom: 19,
+        animate: false
+      });
+
+      return;
+    }
+
+    // Use the projected midpoint rather than
+    // fitBounds, which can misframe rotated maps.
+    const midpoint = window.L.latLng(
+      centreLat,
+      centreLng
+    );
+
+    // Centre the hole at the calculated zoom.
+map.setView(midpoint, zoom, {
+  animate: false
+});
+
+// Shift the hole upwards slightly so the bottom
+// scorecard controls do not cover the tee area.
+//
+// This uses the existing top/bottom padding values
+// and does not change the map bearing or zoom.
+const verticalOffset =
+  (bottomPadding - topPadding) / 2;
+
+map.panBy(
+  [0, verticalOffset],
+  {
+    animate: false
+  }
+);
+
+    console.log("TeeRadar GPS hole framing", {
+      hole: premiumHoleIndex + 1,
+      source,
+      lengthMetres: Math.round(length),
+      bearing: Math.round(bearing),
+      rotation: Math.round(rotation),
+      zoom: Number(zoom.toFixed(2))
+    });
+  });
+}
+
+
+
+    // =====================================================
+// TEERADAR — TEMPORARY MAP ROTATION TEST
+// =====================================================
+
+window.testGpsRotation = function(degrees = 180) {
+  const map = ensureGpsMap();
+
+  if (!map) {
+    console.error("❌ GPS map not available");
+    return;
+  }
+
+  console.log("🧪 MAP ROTATION TEST", {
+    leafletVersion: window.L?.version,
+    setBearingAvailable:
+      typeof map.setBearing === "function",
+    getBearingAvailable:
+      typeof map.getBearing === "function",
+    requestedBearing: degrees,
+    currentBearing:
+      typeof map.getBearing === "function"
+        ? map.getBearing()
+        : "Not supported"
+  });
+
+  if (typeof map.setBearing !== "function") {
+    console.error(
+      "❌ Rotation plugin is not working or has not loaded"
+    );
+    return;
+  }
+
+  map.setBearing(degrees);
+
+  setTimeout(() => {
+    map.invalidateSize();
+
+    console.log("✅ ROTATION TEST RESULT", {
+      requestedBearing: degrees,
+      actualBearing:
+        typeof map.getBearing === "function"
+          ? map.getBearing()
+          : "Unknown"
+    });
+  }, 300);
+};
+    
 function updateGpsMapPosition() {
   if (
     !currentGpsPosition
@@ -6663,21 +9721,18 @@ function updateGpsMapPosition() {
     }
   }
 
+ 
   /*
-   * Centre automatically only on the FIRST fix.
+   * TEERADAR — HOLE-FOCUSED GPS
    *
-   * After that, the golfer is free to pan/zoom the map
-   * without TeeRadar constantly snapping back.
+   * GPS updates the player's location marker,
+   * accuracy circle and live distances.
+   *
+   * It must NEVER move the map camera to the player.
+   * The selected hole controls the map camera.
    */
-  if (!gpsMapHasCentred) {
+  gpsMapHasCentred = true;
 
-    map.setView(
-      point,
-      18
-    );
-
-    gpsMapHasCentred = true;
-  }
 
   if (gpsMapStatus) {
     gpsMapStatus.textContent =
@@ -7480,41 +10535,64 @@ function setLeftPanelsVisibility(show){
 
 
     // -----------------------------------------------------
-    // PRIORITY 4:
-    // Any result that actually has GPS
-    // -----------------------------------------------------
+// TEERADAR — STRICT GPS COURSE MATCHING
+// -----------------------------------------------------
+// Never select an unrelated golf course simply
+// because it has GPS coordinates.
+//
+// Incorrect course coordinates can cause the map
+// to centre kilometres away from the actual hole.
+// -----------------------------------------------------
 
-    if (!match) {
+if (!match) {
 
-      match =
-        courses.find(
-          (course) => {
+  console.warn(
+    "⚠️ TeeRadar GPS: No matching provider course",
+    {
+      requestedCourse: courseName,
+      requestedState: roundState,
 
-            const hasGps =
-              course?.hasGPS ??
-              course?.has_gps;
+      availableResults: courses.map(
+        (course) => ({
+          id:
+            course?.id ||
+            course?.courseID ||
+            course?.provider_course_id,
 
-            return (
-              hasGps === true ||
-              hasGps === 1 ||
-              hasGps === "1"
-            );
-          }
-        ) ||
-        null;
+          name:
+            course?.name ||
+            course?.club,
+
+          state: course?.state,
+
+          hasGPS:
+            course?.hasGPS ??
+            course?.has_gps
+        })
+      )
     }
+  );
 
+  throw new Error(
+    "No matching GolfAPI course found for " +
+    courseName
+  );
+}
 
-    // -----------------------------------------------------
-    // FINAL FALLBACK
-    // -----------------------------------------------------
+console.log(
+  "✅ TeeRadar GPS course selected",
+  {
+    requestedCourse: courseName,
+    selectedCourse:
+      match?.name ||
+      match?.club,
 
-    if (!match) {
-
-      match =
-        courses[0] ||
-        null;
-    }
+    selectedId:
+      match?.id ||
+      match?.courseID ||
+      match?.provider_course_id
+  }
+);
 
 
     const providerId =
@@ -7745,21 +10823,102 @@ function setLeftPanelsVisibility(show){
               // BACK
               // -------------------------------------------
 
-              back:
-                hole?.back
-                  ? {
-                      lat:
-                        Number(
-                          hole.back.lat
-                        ),
+              
+back:
+  hole?.back
+    ? {
+        lat: Number(hole.back.lat),
+        lng: Number(hole.back.lng)
+      }
+    : null,
 
-                      lng:
-                        Number(
-                          hole.back.lng
-                        )
-                    }
-                  : null
-            };
+// Tee coordinates supplied by the backend.
+// Keep null when unavailable.
+teeFront:
+  hole?.teeFront
+    ? {
+        lat: Number(hole.teeFront.lat),
+        lng: Number(hole.teeFront.lng)
+      }
+    : null,
+
+teeBack:
+  hole?.teeBack
+    ? {
+        lat: Number(hole.teeBack.lat),
+        lng: Number(hole.teeBack.lng)
+      }
+    : null,
+
+// =====================================================
+// GOLFAPI 100 M MARKER — POI 6
+// Used for map direction and framing when tee
+// coordinates are unavailable.
+// =====================================================
+
+// =====================================================
+// GOLFAPI POINTS OF INTEREST
+// Preserve all available provider POIs for future
+// scorecard and GPS map features.
+// =====================================================
+
+marker100:
+  hole?.marker100
+    ? {
+        lat: Number(hole.marker100.lat),
+        lng: Number(hole.marker100.lng)
+      }
+    : null,
+
+marker150:
+  hole?.marker150
+    ? {
+        lat: Number(hole.marker150.lat),
+        lng: Number(hole.marker150.lng)
+      }
+    : null,
+
+marker200:
+  hole?.marker200
+    ? {
+        lat: Number(hole.marker200.lat),
+        lng: Number(hole.marker200.lng)
+      }
+    : null,
+
+dogleg:
+  hole?.dogleg
+    ? {
+        lat: Number(hole.dogleg.lat),
+        lng: Number(hole.dogleg.lng)
+      }
+    : null,
+
+pois:
+  Array.isArray(hole?.pois)
+    ? hole.pois.map(poi => ({
+        ...poi,
+        lat: Number(poi.latitude ?? poi.lat),
+        lng: Number(poi.longitude ?? poi.lng)
+      })).filter(poi =>
+        Number.isFinite(poi.lat) &&
+        Number.isFinite(poi.lng)
+      )
+    : [],
+
+greenBunkers: hole?.greenBunkers ?? [],
+fairwayBunkers: hole?.fairwayBunkers ?? [],
+waterHazards: hole?.waterHazards ?? [],
+trees: hole?.trees ?? [],
+roads: hole?.roads ?? [],
+doglegs: hole?.doglegs ?? [],
+markers100: hole?.markers100 ?? [],
+markers150: hole?.markers150 ?? [],
+markers200: hole?.markers200 ?? [],
+frontTees: hole?.frontTees ?? [],
+backTees: hole?.backTees ?? []
+
+};
           }
         )
         .filter(
@@ -7820,8 +10979,15 @@ function setLeftPanelsVisibility(show){
      * Refresh the current hole immediately now
      * that provider GPS data is available.
      */
-    updateGpsDistances();
-    updateGpsGreenMarker();
+    
+// Load manually saved TeeRadar tee coordinates
+// before positioning the GPS map.
+await teeAdminLoadSavedPoints();
+
+updateGpsDistances();
+updateGpsGreenMarker();
+focusGpsMapOnCurrentHole(true);
+
 
 
     /*
@@ -10841,6 +14007,59 @@ const pc = getPlayersCountFromRound(round);
 premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
 const pLabel = playerLabel(premiumPlayerIndex);
 const nextIsPlayer = premiumPlayerIndex < pc - 1;
+  // Shot history is linked to the signed-in golfer,
+// not the player currently selected on the scorecard.
+if (
+  trackShotHistoryKey !==
+  `${Number(currentRoundId)}:${holeNum}`
+) {
+  // Immediately clear the previous hole's shot markers.
+  if (gpsTrackedShotsLayer) {
+    gpsTrackedShotsLayer.clearLayers();
+  }
+
+  trackShotRefresh();
+}
+
+  // Keep the compact Play Mode information up to date.
+const playHoleNumber =
+  document.getElementById("playHoleNumber");
+
+const playHolePar =
+  document.getElementById("playHolePar");
+
+const playRoundScore =
+  document.getElementById("playRoundScore");
+
+if (playHoleNumber) {
+  playHoleNumber.textContent =
+    `${holeNum} / ${holesCount}`;
+}
+
+if (playHolePar) {
+  playHolePar.textContent =
+    Number.isFinite(basePar) ? String(basePar) : "—";
+}
+
+if (playRoundScore) {
+  const rows = readTableHoles();
+
+  const totals = calcTotalsForPlayer(
+    rows,
+    premiumPlayerIndex
+  );
+
+  const toPar = totals.toPar;
+
+  playRoundScore.textContent =
+    toPar == null
+      ? "—"
+      : toPar === 0
+        ? "E"
+        : toPar > 0
+          ? `+${toPar}`
+          : String(toPar);
+}
 
 if (premPills){
   // To Par shown for CURRENT player (not always P1)
@@ -11121,6 +14340,9 @@ if (premPuttBtns) {
   const sel =
     document.createElement("select");
 
+  // Allows Ball on Green to find the existing putts wheel.
+  sel.id = "premPuttsWheel";
+
   sel.style.width = "100%";
   sel.style.padding = "12px";
   sel.style.borderRadius = "12px";
@@ -11247,13 +14469,137 @@ if (premPuttBtns) {
       /*
        * Save ONLY this player on this hole.
        */
-      await savePremiumPlayerScore(
-  holeNum,
-  playerNumber,
-  {
-    putts: v
-  }
+            await savePremiumPlayerScore(
+        holeNum,
+        playerNumber,
+        {
+          putts: v
+        }
+      );
+
+      // ---------------------------------------------------------
+      // TeeRadar — Automatically calculate strokes
+      // from tracked shots + selected putts.
+      // ---------------------------------------------------------
+
+      const trackingRoundId = Number(currentRoundId);
+
+      // Only apply tracking to the golfer whose
+      // shots belong to the logged-in account.
+      const trackingPlayerIdsRaw =
+        currentRound?.player_user_ids;
+
+      let trackingPlayerIds = [];
+
+      try {
+        trackingPlayerIds = Array.isArray(trackingPlayerIdsRaw)
+          ? trackingPlayerIdsRaw
+          : JSON.parse(trackingPlayerIdsRaw || "[]");
+      } catch (_) {
+        trackingPlayerIds = [];
+      }
+
+      // Use the authenticated TeeRadar account ID,
+// rather than relying on a localStorage user_id.
+const tokenPayload =
+  decodeJwtPayload(getToken()) || {};
+
+const loggedInUserId = Number(
+  tokenPayload.id ??
+  tokenPayload.userId ??
+  tokenPayload.user_id ??
+  tokenPayload.sub
 );
+
+      const selectedPlayerUserId = Number(
+        trackingPlayerIds[premiumPlayerIndex]
+      );
+
+      // Do not assume that player 1 owns the tracked
+      // shots on a multiplayer scorecard.
+      const canApplyTracking =
+        trackingPlayerIds.length > 0 &&
+        Number.isInteger(loggedInUserId) &&
+        loggedInUserId > 0 &&
+        selectedPlayerUserId === loggedInUserId;
+
+      if (
+        canApplyTracking &&
+        Number.isInteger(v) &&
+        v >= 0
+      ) {
+        try {
+          const calculatedStrokes =
+            await calculateTrackedHoleStrokes(
+              trackingRoundId,
+              holeNum,
+              v
+            );
+
+          if (
+            Number.isInteger(calculatedStrokes) &&
+            calculatedStrokes >= 1
+          ) {
+            await savePremiumPlayerScore(
+              holeNum,
+              playerNumber,
+              {
+                strokes: calculatedStrokes
+              }
+            );
+
+            setHoleValueInTable(
+              holeNum,
+              "strokes",
+              playerNumber,
+              calculatedStrokes
+            );
+
+            // Update the existing strokes selector
+            // without rebuilding the scorecard.
+            const strokesWheel =
+              premScoreBtns?.querySelector("select");
+
+            if (strokesWheel) {
+              if (calculatedStrokes <= 11) {
+                strokesWheel.value =
+                  String(calculatedStrokes);
+              } else {
+                // Existing wheel uses 11+ as its maximum.
+                strokesWheel.value = "11";
+              }
+            }
+
+            const trackingStatus =
+              document.getElementById(
+                "trackShotStatus"
+              );
+
+            if (trackingStatus) {
+              trackingStatus.textContent =
+                `✓ Score calculated: ` +
+                `${calculatedStrokes - v} shots + ` +
+                `${v} putts = ` +
+                `${calculatedStrokes} strokes`;
+            }
+
+            await syncTeeRadarLiveActivity();
+          }
+        } catch (trackingError) {
+          console.error(
+            "Tracked score calculation failed:",
+            trackingError
+          );
+
+          setToast(
+            rightToast,
+            "Putts saved, but automatic strokes " +
+              "could not be calculated. " +
+              "Please enter strokes manually.",
+            false
+          );
+        }
+      }
 
       /*
        * Keep local in-memory scorecard current.
@@ -11345,12 +14691,23 @@ if (premPrevBtn) {
 if (premNextBtn) {
   premNextBtn.disabled = false;
 }
+
 if (gpsEnabled) {
   updateGpsDistances();
   updateGpsMapPosition();
 } else {
   ensureGpsMap();
 }
+// =========================================================
+// TEERADAR — UPDATE FLAG AND FRAME SELECTED HOLE
+// =========================================================
+
+// Move the red flag to the selected hole's green.
+updateGpsGreenMarker();
+
+// Frame the selected hole on the map.
+focusGpsMapOnCurrentHole(true);
+
 /*
  * Fetch provider GPS only once per opened round.
  * No API call is made every time the golfer changes hole.
@@ -15269,6 +18626,825 @@ if (roundIdFromUrl) {
   clearRoundIdFromUrl();
 }
 })();
-  </script>
+    function togglePlayModeMenu(forceClose = false) {
+  const panel = document.getElementById("playModeMenuPanel");
+  const btn = document.getElementById("playModeMenuBtn");
+
+  if (!panel || !btn) return;
+
+  const shouldOpen = !forceClose && panel.hidden;
+
+  panel.hidden = !shouldOpen;
+  btn.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+    function closePlayScorecard() {
+  premiumShowingTable = false;
+  setPremiumVisible(true);
+
+  const table = document.getElementById("tableWrap");
+
+  if (table) {
+    table.classList.add("hidden");
+  }
+
+  const scorePanel = document.querySelector(
+    "#premiumWrap .premGrid"
+  );
+
+  scorePanel?.classList.remove("playScoreOpen");
+
+  togglePlayModeMenu(true);
+
+  setTimeout(() => {
+    if (gpsMap) {
+      gpsMap.invalidateSize();
+    }
+  }, 100);
+}
+
+    // =========================================================
+// TEERADAR — JUMP TO ANY HOLE
+// =========================================================
+
+function openPlayHoleSelector() {
+  if (!currentRound || premiumScoreEditBusy) return;
+
+  const selector = document.getElementById(
+    "playHoleSelector"
+  );
+
+  const grid = document.getElementById(
+    "playHoleSelectorGrid"
+  );
+
+  if (!selector || !grid) return;
+
+  const holesCount = Math.max(
+    1,
+    Number(currentRound.holes) || 18
+  );
+
+  grid.innerHTML = "";
+
+  for (let hole = 1; hole <= holesCount; hole++) {
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.className = "playHoleChoice";
+    button.textContent = String(hole);
+
+    if (hole === premiumHoleIndex + 1) {
+      button.classList.add("active");
+    }
+
+    button.onclick = () => {
+      jumpToPlayHole(hole);
+    };
+
+    grid.appendChild(button);
+  }
+
+  selector.classList.add("open");
+}
+
+function closePlayHoleSelector() {
+  document.getElementById(
+    "playHoleSelector"
+  )?.classList.remove("open");
+}
+
+function jumpToPlayHole(hole) {
+  if (!currentRound || premiumScoreEditBusy) return;
+
+  const holesCount = Math.max(
+    1,
+    Number(currentRound.holes) || 18
+  );
+
+  const nextIndex = Number(hole) - 1;
+
+  if (
+    !Number.isInteger(nextIndex) ||
+    nextIndex < 0 ||
+    nextIndex >= holesCount
+  ) {
+    return;
+  }
+
+  premiumHoleIndex = nextIndex;
+
+  closePlayHoleSelector();
+
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  focusGpsMapOnCurrentHole(true);
+}
+
+function playModeMenuAction(action) {
+  togglePlayModeMenu(true);
+
+  const scorePanel = document.querySelector(
+    "#premiumWrap .premGrid"
+  );
+
+  const clickExisting = (id) => {
+    const button = document.getElementById(id);
+    if (button) button.click();
+  };
+
+  switch (action) {
+    case "score":
+      if (scorePanel) {
+        scorePanel.classList.toggle("playScoreOpen");
+      }
+      break;
+
+    case "scorecard":
+      scorePanel?.classList.remove("playScoreOpen");
+      clickExisting("toggleTableBtn");
+      break;
+
+    case "exit":
+      scorePanel?.classList.remove("playScoreOpen");
+      clickExisting("roundModeExitBtn");
+      break;
+
+    case "delete":
+      scorePanel?.classList.remove("playScoreOpen");
+      clickExisting("roundModeDeleteBtn");
+      break;
+  }
+}
+    </script>
+<style>
+    /* ================================================
+   TEERADAR — FULL SCREEN PLAY MODE V1
+   ================================================ */
+
+#playModeMenu {
+  display: none;
+}
+
+html.round-mode #playModeMenu {
+  display: block;
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 14px;
+  z-index: 1000100;
+}
+
+#playModeMenuBtn {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 15px;
+  background: #ffffff;
+  color: #10262b;
+  font-size: 27px;
+  font-weight: 800;
+  box-shadow: 0 3px 14px rgba(0,0,0,.25);
+}
+
+#playModeMenuPanel[hidden] {
+  display: none !important;
+}
+
+#playModeMenuPanel {
+  position: absolute;
+  top: 58px;
+  right: 0;
+  width: 205px;
+  padding: 8px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+
+#playModeMenuPanel button {
+  display: block;
+  width: 100%;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #10262b;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#playModeMenuPanel button:active {
+  background: #edf4f3;
+}
+
+/* Full-screen map layer */
+
+html.round-mode #scorecardSection {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border-radius: 0 !important;
+}
+
+html.round-mode #scorecardWrap,
+html.round-mode #premiumWrap,
+html.round-mode #premiumWrap .premBody {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  display: block !important;
+  z-index: 1 !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+/* Hide the large scorecard overlay for now */
+
+html.round-mode #premiumWrap .premTop,
+html.round-mode #premiumWrap .premGrid,
+html.round-mode .roundModeActions {
+  display: none !important;
+}
+
+  /* SHOW HOLE SCORING WHEN REQUESTED */
+
+html.round-mode #premiumWrap .premGrid.playScoreOpen {
+  display: block !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: calc(100% - 32px) !important;
+  max-width: 430px !important;
+  max-height: 75dvh !important;
+  overflow-y: auto !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  z-index: 1000200 !important;
+  box-shadow: 0 8px 35px rgba(0,0,0,.35) !important;
+}
+
+/* Hide the old GPS heading */
+
+/* Keep the map actions available in Play Mode,
+   without showing the old GPS heading. */
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
+  display: contents !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeaderText {
+  display: none !important;
+}
+  /* PLAY MODE — BOTTOM GPS CONTROLS */
+
+html.round-mode #gpsDistanceCard .gpsDistanceGrid {
+  top: auto !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
+  left: 12px !important;
+  transform: none !important;
+  width: calc(100% - 92px) !important;
+  max-width: none !important;
+  gap: 6px !important;
+  z-index: 1000001 !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem {
+  min-width: 0 !important;
+  padding: 9px 3px !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceTop {
+  position: fixed !important;
+  right: 12px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
+  z-index: 1000002 !important;
+  display: block !important;
+  width: 62px !important;
+  height: 76px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceTop > div {
+  display: none !important;
+}
+
+html.round-mode #enableGpsBtn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 62px !important;
+  height: 76px !important;
+  min-width: 0 !important;
+  padding: 4px !important;
+  border-radius: 15px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  white-space: normal !important;
+  text-align: center !important;
+  background: #ffffff !important;
+  color: #10262b !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,.25) !important;
+}
+  /* PLAY MODE — FLOATING MAP ACTIONS */
+
+html.round-mode #gpsMapCard .gpsMapActions {
+  display: flex !important;
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 145px) !important;
+  left: 12px !important;
+  right: auto !important;
+  z-index: 1000050 !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: auto !important;
+  background: transparent !important;
+}
+
+html.round-mode #gpsRecenterBtn,
+html.round-mode #gpsClearMeasureBtn {
+  min-width: 48px !important;
+  min-height: 44px !important;
+  padding: 8px !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  color: #10262b !important;
+  font-size: 12px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.2) !important;
+}
+  html.round-mode #premiumWrap .premGrid.playScoreOpen {
+  position: fixed !important;
+}
+
+html.round-mode #playScoreCloseBtn {
+  display: none;
+}
+
+html.round-mode #premiumWrap .premGrid.playScoreOpen #playScoreCloseBtn {
+  display: flex !important;
+  position: sticky !important;
+  top: 0 !important;
+  margin-left: auto !important;
+  margin-bottom: 8px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: #edf2f3 !important;
+  color: #10262b !important;
+  font-size: 25px !important;
+  cursor: pointer;
+}
+  /* PLAY MODE — FULL SCORECARD OVERLAY */
+
+html.round-mode #tableWrap:not(.hidden) {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  overflow-y: auto !important;
+  z-index: 1000300 !important;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 65px)
+    14px
+    calc(env(safe-area-inset-bottom, 0px) + 30px) !important;
+  background: #f5f8f9 !important;
+}
+
+  /* ================================================
+   TEERADAR — PLAY MODE REFINEMENTS
+   ================================================ */
+
+/* Hole / Par / Round Score */
+
+#playHoleInfo {
+  display: none;
+}
+
+html.round-mode #playHoleInfo {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  position: fixed !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px) !important;
+  left: 12px !important;
+  right: 12px !important;
+  z-index: 1000002 !important;
+  background: rgba(16, 38, 43, 0.94) !important;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 16px;
+  padding: 10px 6px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.25);
+}
+
+html.round-mode .playHoleInfoItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+html.round-mode .playHoleInfoItem + .playHoleInfoItem {
+  border-left: 1px solid rgba(255,255,255,.18);
+}
+
+html.round-mode .playHoleInfoItem span {
+  color: #b8cbcb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+html.round-mode .playHoleInfoItem strong {
+  color: white;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+/* Map action buttons */
+
+/* Play Mode map controls — compact top-right stack */
+
+html.round-mode #gpsMapCard .gpsMapActions {
+  display: flex !important;
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 110px) !important;
+  left: auto !important;
+  right: 12px !important;
+  bottom: auto !important;
+  width: auto !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  z-index: 1000050 !important;
+  background: transparent !important;
+}
+
+html.round-mode #gpsMapFullscreenBtn {
+  display: none !important;
+}
+
+html.round-mode #gpsRecenterBtn,
+html.round-mode #gpsClearMeasureBtn {
+  width: auto !important;
+  max-width: 145px !important;
+  min-height: 40px !important;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+
+html.round-mode #gpsRecenterBtn,
+html.round-mode #gpsClearMeasureBtn {
+  width: auto !important;
+  max-width: 145px !important;
+  min-height: 44px !important;
+  padding: 10px 12px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+}
+
+/* Full-screen scorecard overlay */
+
+#playScorecardHeader {
+  display: none;
+}
+
+html.round-mode #tableWrap:not(.hidden) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    10px
+    calc(env(safe-area-inset-bottom, 0px) + 15px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #f5f8f9 !important;
+  z-index: 1000300 !important;
+  border-radius: 0 !important;
+  box-sizing: border-box !important;
+}
+
+html.round-mode #playScorecardHeader {
+  display: flex !important;
+  position: sticky !important;
+  top: 0;
+  z-index: 3;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 16px;
+  background: #f5f8f9;
+}
+
+html.round-mode #playScorecardHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+html.round-mode #playScorecardHeader strong {
+  color: #10262b;
+  font-size: 21px;
+}
+
+html.round-mode #playScorecardHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+html.round-mode #playScorecardCloseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #e2e8eb;
+  color: #10262b;
+  font-size: 29px;
+  font-weight: 600;
+}
+
+/* Compact scorecard: fit one player's columns
+   across the phone instead of using an 820px table */
+
+html.round-mode #scoreTable {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+
+html.round-mode #scoreTable th,
+html.round-mode #scoreTable td {
+  padding: 7px 2px !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* Prevent iPhone Safari zooming when scoring */
+
+html.round-mode #scoreTable .mini {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 7px 1px !important;
+  font-size: 16px !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  border-radius: 8px !important;
+  touch-action: manipulation;
+}
+
+html.round-mode #scoreTable input,
+html.round-mode #scoreTable select,
+html.round-mode #scoreTable textarea {
+  font-size: 16px !important;
+}
+
+/* Hide distance in Play Mode scorecard only.
+   Distance remains available in the normal editor. */
+
+html.round-mode #scoreTable th:nth-child(3),
+html.round-mode #scoreTable td:nth-child(3) {
+  display: none !important;
+}
+
+  /* ================================================
+   TEERADAR — HOLE JUMP SELECTOR
+   ================================================ */
+
+html.round-mode #playHoleJumpBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+html.round-mode #playHoleNumber {
+  color: #fff;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+html.round-mode .playHoleJumpChevron {
+  font-size: 18px;
+  color: #9fd8c7;
+}
+
+#playHoleSelector {
+  display: none;
+}
+
+html.round-mode #playHoleSelector.open {
+  display: flex !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000600 !important;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, .55);
+}
+
+.playHoleSelectorPanel {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(0,0,0,.3);
+}
+
+.playHoleSelectorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.playHoleSelectorHeader strong {
+  color: #10262b;
+  font-size: 20px;
+}
+
+.playHoleSelectorHeader button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf2f3;
+  color: #10262b;
+  font-size: 25px;
+}
+
+#playHoleSelectorGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.playHoleChoice {
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 1px solid #dce5e7;
+  border-radius: 11px;
+  background: #f5f8f9;
+  color: #10262b;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.playHoleChoice.active {
+  background: #087b66;
+  border-color: #087b66;
+  color: #fff;
+}
+/* ==========================================
+   GPS MAP — SHOT TRACKING BUTTONS
+   ========================================== */
+
+/* ==========================================
+   GPS MAP — SHOT TRACKING BUTTONS
+   ========================================== */
+
+/* Hidden outside fullscreen GPS */
+#gpsMapShotActions {
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Show buttons in fullscreen GPS */
+#gpsMapCard:fullscreen #gpsMapShotActions,
+#gpsMapCard:-webkit-full-screen #gpsMapShotActions,
+#gpsMapCard.gpsMapFullscreen #gpsMapShotActions,
+#gpsMapCard.fullscreen #gpsMapShotActions,
+body.gps-fullscreen #gpsMapShotActions,
+html.round-mode #gpsMapCard #gpsMapShotActions {
+  display: flex !important;
+  flex-direction: column !important;
+
+  position: absolute !important;
+
+  top: 290px !important;
+  right: 12px !important;
+  bottom: auto !important;
+  left: auto !important;
+
+  width: 112px !important;
+  gap: 8px !important;
+
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  z-index: 2100000 !important;
+  pointer-events: auto !important;
+}
+
+/* Individual floating buttons */
+#gpsMapShotActions button {
+  display: block !important;
+  flex: none !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 38px !important;
+
+  padding: 8px 6px !important;
+
+  border: none !important;
+  border-radius: 12px !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+
+  cursor: pointer !important;
+  pointer-events: auto !important;
+
+  box-shadow: 0 3px 10px rgba(0,0,0,.25) !important;
+}
+
+/* Track Shot — green */
+#gpsMapTrackShotBtn {
+  background: #007a61 !important;
+  color: #ffffff !important;
+}
+
+/* Ball on Green — white */
+#gpsMapBallOnGreenBtn {
+  background: #ffffff !important;
+  color: #10262b !important;
+}
+
+</style>
 </body>
 </html>
