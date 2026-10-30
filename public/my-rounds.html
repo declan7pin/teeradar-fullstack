@@ -11721,21 +11721,6 @@ async function searchGolfApiCourseFromEnter() {
         10
       );
 
-  if (
-    localMatches.length > 0
-  ) {
-    console.log(
-      "✅ TeeRadar course found locally — GolfAPI search skipped:",
-      query
-    );
-
-    showCourseAutocomplete(
-      localMatches
-    );
-
-    return;
-  }
-
 
   // -------------------------------------------------------
   // 2. NO LOCAL MATCH — SEARCH GOLFAPI.IO
@@ -11796,6 +11781,10 @@ async function searchGolfApiCourseFromEnter() {
         : [];
 
     if (!courses.length) {
+      if (localMatches.length) {
+  showCourseAutocomplete(localMatches);
+  return;
+}
       courseAutoList.innerHTML = `
         <div class="courseOptionCard">
           <div class="courseOptionTitle">
@@ -11887,9 +11876,25 @@ async function searchGolfApiCourseFromEnter() {
         })
         .filter(Boolean);
 
-    showCourseAutocomplete(
-      providerMatches
-    );
+    const localIds = new Set(
+  localMatches
+    .map(course =>
+      String(course?.provider_course_id || "")
+    )
+    .filter(Boolean)
+);
+
+const additionalProviderMatches =
+  providerMatches.filter(course =>
+    !localIds.has(
+      String(course.provider_course_id)
+    )
+  );
+
+showCourseAutocomplete([
+  ...localMatches,
+  ...additionalProviderMatches
+]);
 
   } catch (error) {
     console.error(
