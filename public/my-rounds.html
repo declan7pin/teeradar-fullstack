@@ -3751,25 +3751,6 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
   Enable GPS to load the satellite map.
 </div>
 
-<!-- SHOT TRACKING BUTTONS ON GPS MAP -->
-<div id="gpsMapShotActions">
-
-  <button
-    id="gpsMapTrackShotBtn"
-    type="button"
-  >
-    📍 Track Shot
-  </button>
-
-  <button
-    id="gpsMapBallOnGreenBtn"
-    type="button"
-  >
-    🟢 Ball on Green
-  </button>
-
-</div>
-
 
 </div>
 
@@ -5203,7 +5184,7 @@ async function trackShotBallOnGreen() {
   overlay.style.cssText = `
     position: fixed;
     inset: 0;
-    z-index: 99999;
+    z-index: 3000000;
     background: rgba(0, 0, 0, 0.65);
     display: flex;
     align-items: flex-end;
@@ -19219,6 +19200,34 @@ html.round-mode #gpsMapCard #gpsMapShotActions {
 #gpsMapBallOnGreenBtn {
   background: #ffffff !important;
   color: #10262b !important;
+}
+  /* GPS shot controls — clean floating buttons */
+#gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
+  display: flex !important;
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 245px) !important;
+  right: 12px !important;
+  left: auto !important;
+  bottom: auto !important;
+
+  flex-direction: column !important;
+  width: 112px !important;
+  gap: 8px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+
+  z-index: 2100000 !important;
+}
+
+#gpsMapCard.gpsMapFullscreen #gpsMapShotActions button {
+  min-height: 40px !important;
+  padding: 8px 6px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,.25) !important;
 }
     </style>
 </body>
