@@ -5433,7 +5433,20 @@ async function trackShotBallOnGreen() {
   panel.appendChild(cancel);
 
   overlay.appendChild(panel);
-  document.body.appendChild(overlay);
+
+// Attach popup inside the active fullscreen element
+// so it appears above the GPS map.
+const fullscreenContainer =
+  document.fullscreenElement ||
+  document.webkitFullscreenElement ||
+  document.querySelector(
+    "#gpsMapCard.gpsMapFullscreen, #gpsMapCard.fullscreen"
+  );
+
+const popupParent =
+  fullscreenContainer || document.body;
+
+popupParent.appendChild(overlay);
 
   // ---------------------------------------------------------
   // EXISTING GPS AND DATABASE SAVE
