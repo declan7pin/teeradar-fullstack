@@ -305,6 +305,7 @@ export async function getCachedGolfApiCourse(
 // SEARCH LOCAL CACHE FIRST
 // =========================================================
 
+
 export async function searchCachedGolfApiCourses({
   name,
   state,
@@ -312,99 +313,205 @@ export async function searchCachedGolfApiCourses({
 }) {
   await ensureGolfApiCacheSchema();
 
-  const values = [];
+  const rawName = String(name || "")
+    .trim()
+    .toLowerCase();
+
+  const normalisedName =
+    normaliseGolfApiSearchName(name);
+
+  if (!rawName) {
+    return [];
+  }
+
+  // Escape SQL LIKE wildcard characters.
+  const escapeLike = (value) =>
+    value.replace(/[\\%_]/g, "\\$&");
+
+  const searchTerms = [
+    ...new Set(
+      [rawName, normalisedName]
+        .filter(Boolean)
+    ),
+  ];
+
   const conditions = [];
+  const values = [];
 
-  if (name) {
-    const rawName =
-      String(name)
-        .trim()
-        .toLowerCase();
+  // Search both provider club and course names.
+  const nameConditions = [];
 
-    const normalisedName =
-      normaliseGolfApiSearchName(
-        name
-      );
+  for (const term of searchTerms) {
+    values.push(`%${escapeLike(term)}%`);
 
-    values.push(
-      `%${rawName}%`
-    );
+    const index = values.length;
 
-    const rawParam =
-      values.length;
-
-    values.push(
-      `%${normalisedName}%`
-    );
-
-    const normalisedParam =
-      values.length;
-
-    conditions.push(`
+    nameConditions.push(`
       (
-        LOWER(course_name)
-          LIKE $${rawParam}
-
+        LOWER(COALESCE(club_name, ''))
+          LIKE $${index} ESCAPE '\\'
         OR
-
-        LOWER(club_name)
-          LIKE $${rawParam}
-
-        OR
-
-        LOWER(course_name)
-          LIKE $${normalisedParam}
-
-        OR
-
-        LOWER(club_name)
-          LIKE $${normalisedParam}
+        LOWER(COALESCE(course_name, ''))
+          LIKE $${index} ESCAPE '\\'
       )
     `);
   }
 
+  conditions.push(
+    `(${nameConditions.join(" OR ")})`
+  );
+
   if (state) {
     values.push(
-      String(state).trim()
+      String(state).trim().toUpperCase()
     );
 
     conditions.push(`
-      state = $${values.length}
+      UPPER(TRIM(COALESCE(state, '')))
+        = $${values.length}
     `);
   }
 
   if (country) {
     values.push(
-      String(country).trim()
+      String(country).trim().toLowerCase()
     );
 
     conditions.push(`
-      country = $${values.length}
+      LOWER(TRIM(COALESCE(country, '')))
+        = $${values.length}
     `);
   }
 
-  const where =
-    conditions.length
-      ? `WHERE ${conditions.join(
-          " AND "
-        )}`
-      : "";
-
-  const result =
-    await db.query(
-      `
+  const result = await db.query(
+    `
       SELECT *
       FROM golf_api_courses
-      ${where}
+      WHERE ${conditions.join(" AND ")}
       ORDER BY
         club_name ASC,
-        course_name ASC
-      LIMIT 200
-      `,
-      values
+        course_name ASC,
+        golfapi_course_id ASC
+      LIMIT 500
+    `,
+    values
+  );
+
+  // -------------------------------------------------------
+  // RANK MATCHES
+  // -------------------------------------------------------
+
+  const normalise = (value) =>
+    normaliseGolfApiSearchName(value)
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const queryName = normalise(name);
+
+  function scoreCourse(course) {
+    const club = normalise(course.club_name);
+    const layout = normalise(course.course_name);
+
+    const combined = normalise(
+      `${course.club_name || ""} ${
+        course.course_name || ""
+      }`
     );
 
-  return result.rows;
+    let score = 0;
+
+    // Exact matches are strongest.
+    if (combined === queryName) score = 120;
+    if (layout === queryName) {
+      score = Math.max(score, 110);
+    }
+    if (club === queryName) {
+      score = Math.max(score, 105);
+    }
+
+    // Then whole-name partial matches.
+    if (
+      queryName &&
+      combined.includes(queryName)
+    ) {
+      score = Math.max(score, 85);
+    }
+
+    if (
+      queryName &&
+      club.includes(queryName)
+    ) {
+      score = Math.max(score, 80);
+    }
+
+    if (
+      queryName &&
+      layout.includes(queryName)
+    ) {
+      score = Math.max(score, 75);
+    }
+
+    // Weaker matches remain available.
+    if (
+      queryName &&
+      queryName.includes(club) &&
+      club.length >= 4
+    ) {
+      score = Math.max(score, 55);
+    }
+
+    // Prefer already loaded data only as a tie-breaker.
+    if (course.course_data_loaded) {
+      score += 2;
+    }
+
+    if (course.coordinates_loaded) {
+      score += 1;
+    }
+
+    return score;
+  }
+
+  const ranked = result.rows
+    .map((course) => ({
+      course,
+      score: scoreCourse(course),
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        String(a.course.club_name || "")
+          .localeCompare(
+            String(b.course.club_name || "")
+          ) ||
+        String(a.course.course_name || "")
+          .localeCompare(
+            String(b.course.course_name || "")
+          ) ||
+        String(a.course.golfapi_course_id)
+          .localeCompare(
+            String(b.course.golfapi_course_id)
+          )
+    );
+
+  console.log(
+    `⛳ GolfAPI directory search: "${name}"`,
+    {
+      state: state || null,
+      country,
+      matches: ranked.length,
+      bestMatch:
+        ranked[0]?.course?.club_name || null,
+      bestCourse:
+        ranked[0]?.course?.course_name || null,
+      bestScore: ranked[0]?.score ?? null,
+    }
+  );
+
+  // Return original database rows.
+  // gpsRoutes.js expects this existing structure.
+  return ranked.map(({ course }) => course);
 }
 
 
