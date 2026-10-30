@@ -759,38 +759,148 @@ router.get(
 
 // =========================================================
 // TEERADAR ADMIN TEE POINTS
+// Shared tees for Collier Park's three nines
 // =========================================================
 
 const TEE_ADMIN_EMAIL = "declan7pin@gmail.com";
+
+const COLLIER_LAYOUTS = Object.freeze({
+  "0331202942680126": ["Island", "Island"],
+  "0321202942680126": ["Island", "Lake"],
+  "0311202942680126": ["Island", "Pines"],
+  "0231202942680126": ["Lake", "Island"],
+  "0221202942680126": ["Lake", "Lake"],
+  "0211202942680126": ["Lake", "Pines"],
+  "0131202942680126": ["Pines", "Island"],
+  "0121202942680126": ["Pines", "Lake"],
+  "0111202942680126": ["Pines", "Pines"],
+});
+
+function sharedNineForHole(courseId, hole) {
+  const layout = COLLIER_LAYOUTS[String(courseId)];
+
+  if (
+    !layout ||
+    !Number.isInteger(hole) ||
+    hole < 1 ||
+    hole > 18
+  ) {
+    return null;
+  }
+
+  return {
+    clubKey: "collier-park-wa",
+    nineName: layout[hole <= 9 ? 0 : 1],
+    nineHole: ((hole - 1) % 9) + 1,
+  };
+}
 
 let teeTablePromise = null;
 
 async function ensureTeePointsTable() {
   if (!teeTablePromise) {
-    teeTablePromise = db.query(`
-      CREATE TABLE IF NOT EXISTS teeradar_tee_points (
-        id BIGSERIAL PRIMARY KEY,
-        provider_course_id TEXT NOT NULL,
-        hole_number INTEGER NOT NULL
-          CHECK (hole_number BETWEEN 1 AND 36),
-        tee_type TEXT NOT NULL
-          CHECK (tee_type IN ('front', 'back')),
-        latitude DOUBLE PRECISION NOT NULL
-          CHECK (latitude BETWEEN -90 AND 90),
-        longitude DOUBLE PRECISION NOT NULL
-          CHECK (longitude BETWEEN -180 AND 180),
-        source TEXT NOT NULL DEFAULT 'admin_manual',
-        created_by TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-        UNIQUE (
-          provider_course_id,
-          hole_number,
-          tee_type
+    teeTablePromise = (async () => {
+      // Preserve the existing per-course table.
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS teeradar_tee_points (
+          id BIGSERIAL PRIMARY KEY,
+          provider_course_id TEXT NOT NULL,
+          hole_number INTEGER NOT NULL
+            CHECK (hole_number BETWEEN 1 AND 36),
+          tee_type TEXT NOT NULL
+            CHECK (tee_type IN ('front', 'back')),
+          latitude DOUBLE PRECISION NOT NULL
+            CHECK (latitude BETWEEN -90 AND 90),
+          longitude DOUBLE PRECISION NOT NULL
+            CHECK (longitude BETWEEN -180 AND 180),
+          source TEXT NOT NULL DEFAULT 'admin_manual',
+          created_by TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (provider_course_id, hole_number, tee_type)
         )
-      )
-    `).catch((error) => {
+      `);
+
+      // One coordinate per physical nine, hole and tee type.
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS teeradar_shared_nine_tees (
+          id BIGSERIAL PRIMARY KEY,
+          club_key TEXT NOT NULL,
+          nine_name TEXT NOT NULL,
+          nine_hole INTEGER NOT NULL
+            CHECK (nine_hole BETWEEN 1 AND 9),
+          tee_type TEXT NOT NULL
+            CHECK (tee_type IN ('front', 'back')),
+          latitude DOUBLE PRECISION NOT NULL
+            CHECK (latitude BETWEEN -90 AND 90),
+          longitude DOUBLE PRECISION NOT NULL
+            CHECK (longitude BETWEEN -180 AND 180),
+          source TEXT NOT NULL DEFAULT 'admin_manual',
+          created_by TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (club_key, nine_name, nine_hole, tee_type)
+        )
+      `);
+
+      // Tracks completed migrations across deployments.
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS teeradar_tee_migrations (
+          migration_key TEXT PRIMARY KEY,
+          completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      // Import the existing Island corrections once.
+      // The original records remain untouched.
+      const migration = await db.query(`
+        INSERT INTO teeradar_tee_migrations (migration_key)
+        VALUES ('collier-island-shared-v1')
+        ON CONFLICT DO NOTHING
+        RETURNING migration_key
+      `);
+
+      if (migration.rowCount) {
+        try {
+          await db.query(`
+            INSERT INTO teeradar_shared_nine_tees (
+              club_key,
+              nine_name,
+              nine_hole,
+              tee_type,
+              latitude,
+              longitude,
+              source,
+              created_by
+            )
+            SELECT
+              'collier-park-wa',
+              'Island',
+              hole_number,
+              tee_type,
+              latitude,
+              longitude,
+              source,
+              created_by
+            FROM teeradar_tee_points
+            WHERE provider_course_id = '0331202942680126'
+              AND hole_number BETWEEN 1 AND 9
+            ON CONFLICT (
+              club_key,
+              nine_name,
+              nine_hole,
+              tee_type
+            ) DO NOTHING
+          `);
+        } catch (error) {
+          await db.query(`
+            DELETE FROM teeradar_tee_migrations
+            WHERE migration_key = 'collier-island-shared-v1'
+          `);
+          throw error;
+        }
+      }
+    })().catch(error => {
       teeTablePromise = null;
       throw error;
     });
@@ -808,11 +918,11 @@ async function isTeeAdmin(req) {
 
   const result = await db.query(
     `
-    SELECT id
-    FROM users
-    WHERE id = $1
-      AND LOWER(email) = $2
-    LIMIT 1
+      SELECT id
+      FROM users
+      WHERE id = $1
+        AND LOWER(email) = $2
+      LIMIT 1
     `,
     [userId, TEE_ADMIN_EMAIL]
   );
@@ -837,9 +947,9 @@ function validCoordinates(lat, lng) {
   );
 }
 
-// ---------------------------------------------------------
+// =========================================================
 // GET SAVED TEE POINTS
-// ---------------------------------------------------------
+// =========================================================
 
 router.get(
   "/course/:providerCourseId/tees",
@@ -859,27 +969,88 @@ router.get(
         });
       }
 
-      const result = await db.query(
+      // Load existing per-course corrections.
+      const legacy = await db.query(
         `
+          SELECT
+            hole_number,
+            tee_type,
+            latitude,
+            longitude,
+            source
+          FROM teeradar_tee_points
+          WHERE provider_course_id = $1
+          ORDER BY hole_number, tee_type
+        `,
+        [courseId]
+      );
+
+      // Unrelated courses keep their existing behaviour.
+      if (!COLLIER_LAYOUTS[courseId]) {
+        return res.json({
+          ok: true,
+          provider_course_id: courseId,
+          tees: legacy.rows,
+        });
+      }
+
+      // Load shared Collier Park corrections.
+      const shared = await db.query(`
         SELECT
-          hole_number,
+          nine_name,
+          nine_hole,
           tee_type,
           latitude,
           longitude,
           source
-        FROM teeradar_tee_points
-        WHERE provider_course_id = $1
-        ORDER BY hole_number, tee_type
-        `,
-        [courseId]
+        FROM teeradar_shared_nine_tees
+        WHERE club_key = 'collier-park-wa'
+      `);
+
+      const byKey = new Map(
+        legacy.rows.map(row => [
+          `${row.hole_number}:${row.tee_type}`,
+          row,
+        ])
+      );
+
+      // Translate shared nine holes into the selected
+      // 18-hole configuration's hole numbering.
+      for (let hole = 1; hole <= 18; hole++) {
+        const nine = sharedNineForHole(courseId, hole);
+
+        for (const row of shared.rows) {
+          if (
+            row.nine_name !== nine.nineName ||
+            Number(row.nine_hole) !== nine.nineHole
+          ) {
+            continue;
+          }
+
+          byKey.set(`${hole}:${row.tee_type}`, {
+            hole_number: hole,
+            tee_type: row.tee_type,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            source: row.source,
+          });
+        }
+      }
+
+      const tees = [...byKey.values()].sort(
+        (a, b) =>
+          Number(a.hole_number) -
+            Number(b.hole_number) ||
+          String(a.tee_type).localeCompare(
+            String(b.tee_type)
+          )
       );
 
       return res.json({
         ok: true,
         provider_course_id: courseId,
-        tees: result.rows,
+        tees,
       });
-
     } catch (error) {
       console.error("Load tee points failed:", error);
 
@@ -891,9 +1062,9 @@ router.get(
   }
 );
 
-// ---------------------------------------------------------
+// =========================================================
 // SAVE OR UPDATE ADMIN TEE POINT
-// ---------------------------------------------------------
+// =========================================================
 
 router.put(
   "/course/:providerCourseId/tees/:hole/:teeType",
@@ -913,7 +1084,6 @@ router.put(
 
       const hole = Number(req.params.hole);
       const teeType = req.params.teeType;
-
       const lat = req.body?.lat;
       const lng = req.body?.lng;
 
@@ -934,48 +1104,104 @@ router.put(
 
       await ensureTeePointsTable();
 
-      const result = await db.query(
-        `
-        INSERT INTO teeradar_tee_points (
-          provider_course_id,
-          hole_number,
-          tee_type,
-          latitude,
-          longitude,
-          source,
-          created_by
-        )
-        VALUES ($1, $2, $3, $4, $5, 'admin_manual', $6)
+      const nine = sharedNineForHole(courseId, hole);
 
-        ON CONFLICT (
-          provider_course_id,
-          hole_number,
-          tee_type
-        )
-        DO UPDATE SET
-          latitude = EXCLUDED.latitude,
-          longitude = EXCLUDED.longitude,
-          source = 'admin_manual',
-          created_by = EXCLUDED.created_by,
-          updated_at = NOW()
+      let result;
 
-        RETURNING *
-        `,
-        [
-          courseId,
-          hole,
-          teeType,
-          lat,
-          lng,
-          TEE_ADMIN_EMAIL,
-        ]
-      );
+      if (nine) {
+        // Collier Park: save against the physical nine.
+        result = await db.query(
+          `
+            INSERT INTO teeradar_shared_nine_tees (
+              club_key,
+              nine_name,
+              nine_hole,
+              tee_type,
+              latitude,
+              longitude,
+              source,
+              created_by
+            )
+            VALUES (
+              $1, $2, $3, $4, $5, $6,
+              'admin_manual', $7
+            )
+            ON CONFLICT (
+              club_key,
+              nine_name,
+              nine_hole,
+              tee_type
+            )
+            DO UPDATE SET
+              latitude = EXCLUDED.latitude,
+              longitude = EXCLUDED.longitude,
+              source = 'admin_manual',
+              created_by = EXCLUDED.created_by,
+              updated_at = NOW()
+            RETURNING *
+          `,
+          [
+            nine.clubKey,
+            nine.nineName,
+            nine.nineHole,
+            teeType,
+            lat,
+            lng,
+            TEE_ADMIN_EMAIL,
+          ]
+        );
+      } else {
+        // Other clubs: retain the existing save method.
+        result = await db.query(
+          `
+            INSERT INTO teeradar_tee_points (
+              provider_course_id,
+              hole_number,
+              tee_type,
+              latitude,
+              longitude,
+              source,
+              created_by
+            )
+            VALUES (
+              $1, $2, $3, $4, $5,
+              'admin_manual', $6
+            )
+            ON CONFLICT (
+              provider_course_id,
+              hole_number,
+              tee_type
+            )
+            DO UPDATE SET
+              latitude = EXCLUDED.latitude,
+              longitude = EXCLUDED.longitude,
+              source = 'admin_manual',
+              created_by = EXCLUDED.created_by,
+              updated_at = NOW()
+            RETURNING *
+          `,
+          [
+            courseId,
+            hole,
+            teeType,
+            lat,
+            lng,
+            TEE_ADMIN_EMAIL,
+          ]
+        );
+      }
 
       return res.json({
         ok: true,
-        tee: result.rows[0],
+        tee: {
+          ...result.rows[0],
+          provider_course_id: courseId,
+          hole_number: hole,
+          tee_type: teeType,
+          latitude: lat,
+          longitude: lng,
+        },
       });
-
     } catch (error) {
       console.error("Save tee point failed:", error);
 
@@ -987,9 +1213,9 @@ router.put(
   }
 );
 
-// ---------------------------------------------------------
+// =========================================================
 // DELETE ADMIN TEE POINT
-// ---------------------------------------------------------
+// =========================================================
 
 router.delete(
   "/course/:providerCourseId/tees/:hole/:teeType",
@@ -1025,22 +1251,72 @@ router.delete(
 
       await ensureTeePointsTable();
 
-      const result = await db.query(
-        `
-        DELETE FROM teeradar_tee_points
-        WHERE provider_course_id = $1
-          AND hole_number = $2
-          AND tee_type = $3
-        RETURNING id
-        `,
-        [courseId, hole, teeType]
-      );
+      const nine = sharedNineForHole(courseId, hole);
+
+      let result;
+
+      if (nine) {
+        // Delete the shared correction.
+        result = await db.query(
+          `
+            DELETE FROM teeradar_shared_nine_tees
+            WHERE club_key = $1
+              AND nine_name = $2
+              AND nine_hole = $3
+              AND tee_type = $4
+            RETURNING id
+          `,
+          [
+            nine.clubKey,
+            nine.nineName,
+            nine.nineHole,
+            teeType,
+          ]
+        );
+
+        // Remove matching old per-configuration records
+        // so deleted corrections cannot reappear.
+        for (const [otherId, layout] of Object.entries(
+          COLLIER_LAYOUTS
+        )) {
+          for (let i = 0; i < 2; i++) {
+            if (layout[i] !== nine.nineName) {
+              continue;
+            }
+
+            await db.query(
+              `
+                DELETE FROM teeradar_tee_points
+                WHERE provider_course_id = $1
+                  AND hole_number = $2
+                  AND tee_type = $3
+              `,
+              [
+                otherId,
+                nine.nineHole + i * 9,
+                teeType,
+              ]
+            );
+          }
+        }
+      } else {
+        // Other clubs retain existing deletion behaviour.
+        result = await db.query(
+          `
+            DELETE FROM teeradar_tee_points
+            WHERE provider_course_id = $1
+              AND hole_number = $2
+              AND tee_type = $3
+            RETURNING id
+          `,
+          [courseId, hole, teeType]
+        );
+      }
 
       return res.json({
         ok: true,
         deleted: result.rowCount > 0,
       });
-
     } catch (error) {
       console.error("Delete tee point failed:", error);
 
@@ -1051,6 +1327,5 @@ router.delete(
     }
   }
 );
-
 
 export default router;
