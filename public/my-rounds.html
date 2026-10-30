@@ -3594,6 +3594,25 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
      ===================================================== -->
 <div class="gpsMapCard" id="gpsMapCard">
 
+<!-- GPS MAP SHOT TRACKING CONTROLS -->
+<div id="gpsMapShotActions">
+  <button
+    id="gpsMapTrackShotBtn"
+    type="button"
+    onclick="document.getElementById('trackShotBtn')?.click()"
+  >
+    📍 Track Shot
+  </button>
+
+  <button
+    id="gpsMapBallOnGreenBtn"
+    type="button"
+    onclick="document.getElementById('trackShotBallOnGreen')?.click()"
+  >
+    🟢 Ball on Green
+  </button>
+</div>
+
 <div class="gpsMapHeader">
 
   <div class="gpsMapHeaderText">
@@ -19147,47 +19166,45 @@ html.round-mode #playHoleSelector.open {
 #gpsMapCard:-webkit-full-screen #gpsMapShotActions,
 #gpsMapCard.gpsMapFullscreen #gpsMapShotActions,
 #gpsMapCard.fullscreen #gpsMapShotActions,
-body.gps-fullscreen #gpsMapShotActions {
+body.gps-fullscreen #gpsMapShotActions,
+html.round-mode #gpsMapCard #gpsMapShotActions {
   display: flex !important;
   flex-direction: column !important;
 
   position: absolute !important;
 
-  top: 265px !important;
-  right: 12px !important;
+  top: 125px !important;
+  right: 10px !important;
   bottom: auto !important;
   left: auto !important;
 
   width: 112px !important;
+  gap: 6px !important;
 
   z-index: 1000100 !important;
-
-  gap: 8px !important;
-  pointer-events: auto;
+  pointer-events: auto !important;
 }
 
 /* Small compact buttons */
 #gpsMapShotActions button {
-  display: block;
+  display: block !important;
   flex: none !important;
 
   width: 100% !important;
   min-width: 0 !important;
-  min-height: 38px !important;
+  min-height: 34px !important;
 
-  padding: 8px 6px !important;
+  padding: 7px 5px !important;
 
-  border: none;
-  border-radius: 10px;
+  border: none !important;
+  border-radius: 9px !important;
 
   font-size: 11px !important;
-  font-weight: 700;
-
+  font-weight: 700 !important;
   line-height: 1.2;
-  cursor: pointer;
 
-  background: #ffffff;
-  color: #10262b;
+  cursor: pointer;
+  pointer-events: auto !important;
 
   box-shadow: 0 3px 10px rgba(0,0,0,.25);
 }
