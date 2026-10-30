@@ -6053,6 +6053,128 @@ async function calculateTrackedHoleStrokes(
   return shots.length + putts;
 }
 
+    function promptTrackShotClub() {
+  return new Promise((resolve) => {
+    const existingSelect =
+      document.getElementById("trackShotClub");
+
+    const parent =
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.body;
+
+    const overlay = document.createElement("div");
+
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    `;
+
+    const panel = document.createElement("div");
+
+    panel.style.cssText = `
+      background: white;
+      color: #10262b;
+      border-radius: 18px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+      display: grid;
+      gap: 14px;
+    `;
+
+    const title = document.createElement("h3");
+    title.textContent = "Which club are you using?";
+    title.style.margin = "0";
+
+    const select = document.createElement("select");
+    select.className = "input";
+    select.style.cssText = `
+      width: 100%;
+      min-height: 48px;
+      font-size: 16px;
+    `;
+
+    if (existingSelect) {
+      select.innerHTML = existingSelect.innerHTML;
+    } else {
+      select.innerHTML =
+        '<option value="">No club selected</option>';
+    }
+
+    select.value = "";
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "📍 Save Shot";
+    save.style.cssText = `
+      background: #007d70;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+    `;
+
+    const skip = document.createElement("button");
+    skip.type = "button";
+    skip.textContent = "Skip Club";
+    skip.style.cssText = `
+      background: #e6f4f1;
+      color: #006b60;
+      border: none;
+      border-radius: 12px;
+      padding: 12px;
+      font-weight: bold;
+    `;
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.style.cssText = `
+      background: transparent;
+      border: none;
+      padding: 10px;
+      color: #64748b;
+    `;
+
+    function finish(value) {
+      overlay.remove();
+      resolve(value);
+    }
+
+    save.addEventListener("click", () => {
+      finish(select.value);
+    });
+
+    skip.addEventListener("click", () => {
+      finish("");
+    });
+
+    cancel.addEventListener("click", () => {
+      finish(null);
+    });
+
+    panel.append(
+      title,
+      select,
+      save,
+      skip,
+      cancel
+    );
+
+    overlay.appendChild(panel);
+    parent.appendChild(overlay);
+  });
+}
 
 async function saveTrackedShot() {
   const button = document.getElementById(
@@ -6098,10 +6220,21 @@ async function saveTrackedShot() {
     return;
   }
 
+    // Prevent another shot from starting while
+  // the golfer is selecting a club.
+  trackShotSaving = true;
+
+  // Ask for the club before capturing GPS.
+  const club = await promptTrackShotClub();
+
+  // Cancel means no shot is recorded.
+  if (club === null) {
+    trackShotSaving = false;
+    return;
+  }
+
   const Geolocation =
     window.Capacitor?.Plugins?.Geolocation;
-
-  trackShotSaving = true;
 
   if (button) {
     button.disabled = true;
@@ -6206,9 +6339,6 @@ async function saveTrackedShot() {
     if (status) {
       status.textContent = "Saving shot…";
     }
-
-    const club =
-      String(clubSelect?.value || "").trim();
 
     const result = await api(
       `/api/rounds/${roundId}/shots`,
