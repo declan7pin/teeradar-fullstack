@@ -10444,19 +10444,9 @@ function setLeftPanelsVisibility(show){
                 .trim()
                 .toLowerCase();
 
-            const hasGps =
-              course?.hasGPS ??
-              course?.has_gps;
-
             return (
-              providerLayout ===
-                wantedLayout &&
-              (
-                hasGps === true ||
-                hasGps === 1 ||
-                hasGps === "1"
-              )
-            );
+  providerLayout === wantedLayout
+);
           }
         ) ||
         null;
