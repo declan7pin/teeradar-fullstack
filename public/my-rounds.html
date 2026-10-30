@@ -19138,11 +19138,21 @@ html.round-mode #playHoleSelector.open {
    GPS MAP — SHOT TRACKING BUTTONS
    ========================================== */
 
+/* ==========================================
+   GPS MAP — SHOT TRACKING BUTTONS
+   ========================================== */
+
+/* Hidden outside fullscreen GPS */
 #gpsMapShotActions {
-  display: none;
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-/* Fullscreen GPS map */
+/* Show buttons in fullscreen GPS */
 #gpsMapCard:fullscreen #gpsMapShotActions,
 #gpsMapCard:-webkit-full-screen #gpsMapShotActions,
 #gpsMapCard.gpsMapFullscreen #gpsMapShotActions,
@@ -19154,40 +19164,47 @@ html.round-mode #gpsMapCard #gpsMapShotActions {
 
   position: absolute !important;
 
-  top: 125px !important;
-  right: 10px !important;
+  top: 230px !important;
+  right: 12px !important;
   bottom: auto !important;
   left: auto !important;
 
   width: 112px !important;
-  gap: 6px !important;
+  gap: 8px !important;
 
-  z-index: 1000100 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  z-index: 2100000 !important;
   pointer-events: auto !important;
 }
 
-/* Small compact buttons */
+/* Individual floating buttons */
 #gpsMapShotActions button {
   display: block !important;
   flex: none !important;
 
   width: 100% !important;
   min-width: 0 !important;
-  min-height: 34px !important;
+  min-height: 38px !important;
 
-  padding: 7px 5px !important;
+  padding: 8px 6px !important;
 
   border: none !important;
-  border-radius: 9px !important;
+  border-radius: 12px !important;
 
   font-size: 11px !important;
   font-weight: 700 !important;
-  line-height: 1.2;
+  line-height: 1.2 !important;
 
-  cursor: pointer;
+  cursor: pointer !important;
   pointer-events: auto !important;
 
-  box-shadow: 0 3px 10px rgba(0,0,0,.25);
+  box-shadow: 0 3px 10px rgba(0,0,0,.25) !important;
 }
 
 /* Track Shot — green */
@@ -19201,34 +19218,7 @@ html.round-mode #gpsMapCard #gpsMapShotActions {
   background: #ffffff !important;
   color: #10262b !important;
 }
-  /* GPS shot controls — clean floating buttons */
-#gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
-  display: flex !important;
-  position: fixed !important;
-  top: calc(env(safe-area-inset-top, 0px) + 245px) !important;
-  right: 12px !important;
-  left: auto !important;
-  bottom: auto !important;
 
-  flex-direction: column !important;
-  width: 112px !important;
-  gap: 8px !important;
-
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-
-  z-index: 2100000 !important;
-}
-
-#gpsMapCard.gpsMapFullscreen #gpsMapShotActions button {
-  min-height: 40px !important;
-  padding: 8px 6px !important;
-  border-radius: 12px !important;
-  box-shadow: 0 3px 10px rgba(0,0,0,.25) !important;
-}
-    </style>
+</style>
 </body>
 </html>
