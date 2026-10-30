@@ -6761,7 +6761,6 @@ function teeAdminGetSavedPoint(hole, teeType) {
 
   return { lat, lng };
 }
-
 function teeAdminInitialiseControls() {
   const panel = document.getElementById("teeAdminPanel");
   const toggle = document.getElementById("teeEditToggle");
@@ -6783,10 +6782,41 @@ function teeAdminInitialiseControls() {
 
   if (!isAdmin) {
     panel.style.display = "none";
+    document.getElementById("gpsMapAdminTeeBtn")?.remove();
     return;
   }
 
   panel.style.display = "";
+
+  // Add an admin-only tee editing button to the GPS map.
+  const shotActions = document.getElementById("gpsMapShotActions");
+
+  if (
+    shotActions &&
+    !document.getElementById("gpsMapAdminTeeBtn")
+  ) {
+    const teeButton = document.createElement("button");
+
+    teeButton.id = "gpsMapAdminTeeBtn";
+    teeButton.type = "button";
+    teeButton.textContent = "📍 Set Tee Location";
+
+    teeButton.style.cssText = `
+      background: #ffffff !important;
+      color: #10262b !important;
+      border: 1px solid #d4ded9 !important;
+    `;
+
+    teeButton.addEventListener("click", () => {
+      toggle.click();
+
+      teeButton.textContent = teeAdminEditing
+        ? "✓ Finish Tee Editing"
+        : "📍 Set Tee Location";
+    });
+
+    shotActions.appendChild(teeButton);
+  }
 
   toggle.addEventListener("click", () => {
     teeAdminEditing = !teeAdminEditing;
@@ -6803,6 +6833,15 @@ function teeAdminInitialiseControls() {
       teeAdminSetStatus(
         `Editing hole ${teeAdminCurrentHole()} — tap the map to position the tee.`
       );
+    }
+
+    const gpsTeeButton =
+      document.getElementById("gpsMapAdminTeeBtn");
+
+    if (gpsTeeButton) {
+      gpsTeeButton.textContent = teeAdminEditing
+        ? "✓ Finish Tee Editing"
+        : "📍 Set Tee Location";
     }
   });
 
