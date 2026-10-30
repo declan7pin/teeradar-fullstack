@@ -19143,7 +19143,11 @@ html.round-mode #playHoleSelector.open {
 }
 
 /* Fullscreen GPS map */
-#gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
+#gpsMapCard:fullscreen #gpsMapShotActions,
+#gpsMapCard:-webkit-full-screen #gpsMapShotActions,
+#gpsMapCard.gpsMapFullscreen #gpsMapShotActions,
+#gpsMapCard.fullscreen #gpsMapShotActions,
+body.gps-fullscreen #gpsMapShotActions {
   display: flex !important;
   flex-direction: column !important;
 
