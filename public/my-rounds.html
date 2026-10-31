@@ -6942,9 +6942,18 @@ function teeAdminGetSavedPoint(hole, teeType) {
    if (greenAdminSaving) return false;
 
    const courseId = providerGpsCourseId;
-   const hole = Number(premiumHoleIndex) + 1;
-   const point = greenAdminPendingPoint;
-   const token = getToken();
+
+// Use the same provider hole mapping as the GPS map.
+// This handles Back 9 rounds correctly.
+const providerGreen = getCurrentProviderGreen();
+
+const hole = Number(
+  providerGreen?.hole ??
+  (Number(premiumHoleIndex) + 1)
+);
+
+const point = greenAdminPendingPoint;
+const token = getToken();
 
    if (!courseId || !token) {
      alert("A valid course and login are required.");
@@ -7005,10 +7014,8 @@ greenAdminCancelEditing();
 updateGpsGreenMarker();
 updateGpsDistances();
 
-// Refresh the map framing using the corrected green.
-if (typeof updateGpsMapHoleFraming === "function") {
-  updateGpsMapHoleFraming();
-}
+// Reframe the current hole using the corrected green.
+focusGpsMapOnCurrentHole(true);
 
 alert(`Green location saved for hole ${hole}.`);
 
@@ -7928,9 +7935,8 @@ function getBestCurrentHoleGps() {
  * SECOND choice:
  * GolfAPI.io green GPS.
  */
-const providerGreen =
-  getCurrentProviderGreen();
-
+// providerGreen was already loaded at the
+// beginning of getBestCurrentHoleGps().
 if (providerGreen) {
 
   return {
@@ -9312,9 +9318,12 @@ if (
    * Provider coordinates are already decimal lat/lng.
    */
   if (
-    gps?.source === "provider" &&
-    gps?.middle
-  ) {
+  (
+    gps?.source === "provider" ||
+    gps?.source === "teeradar-admin"
+  ) &&
+  gps?.middle
+) {
     middle = {
       lat:
         Number(
