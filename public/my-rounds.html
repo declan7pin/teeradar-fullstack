@@ -6571,10 +6571,12 @@ function acceptTeeRadarGpsPosition(position) {
 // =========================================================
 // GOLFAPI.IO — LIVE GREEN GPS
 // =========================================================
-
 let providerGpsCourseId = null;
 let providerGpsCourseName = "";
 let providerGpsGreens = [];
+
+// Manually corrected green centres, indexed by hole.
+let greenAdminCorrections = new Map();
 
 let providerGpsLoading = false;
 let providerGpsLoadedForRoundId = null;
@@ -6990,13 +6992,27 @@ function teeAdminGetSavedPoint(hole, teeType) {
        );
      }
 
-     greenAdminCancelEditing();
+     // Save the corrected position locally immediately.
+greenAdminCorrections.set(hole, {
+  lat: Number(point.lat),
+  lng: Number(point.lng)
+});
 
-     alert(
-       `Green location saved for hole ${hole}.`
-     );
+// Finish editing and remove the preview marker.
+greenAdminCancelEditing();
 
-     return true;
+// Refresh the red flag and live GPS distances.
+updateGpsGreenMarker();
+updateGpsDistances();
+
+// Refresh the map framing using the corrected green.
+if (typeof updateGpsMapHoleFraming === "function") {
+  updateGpsMapHoleFraming();
+}
+
+alert(`Green location saved for hole ${hole}.`);
+
+return true;
 
    } catch (error) {
      console.error(
@@ -7833,6 +7849,46 @@ function getTeeRadarHolePreviewCoordinates() {
 
 function getBestCurrentHoleGps() {
 
+  
+  // =====================================================
+  // FIRST PRIORITY — MANUALLY CORRECTED GREEN LOCATION
+  // =====================================================
+
+  const providerGreen = getCurrentProviderGreen();
+
+  // Use the mapped provider hole number where available.
+  // This also supports rounds using a Back 9 layout.
+  const providerHole = Number(
+    providerGreen?.hole ??
+    providerGreen?.hole_number ??
+    (premiumHoleIndex + 1)
+  );
+
+  const correctedGreen =
+    greenAdminCorrections.get(providerHole);
+
+  if (correctedGreen) {
+    const centre = {
+      lat: correctedGreen.lat,
+      lng: correctedGreen.lng
+    };
+
+    return {
+      source: "teeradar-admin",
+      front: providerGreen?.front || null,
+      middle: centre,
+      back: providerGreen?.back || null,
+      raw: {
+        ...(providerGreen || {}),
+        lat: centre.lat,
+        lng: centre.lng,
+        middle: centre
+      }
+    };
+  }
+
+
+
   /*
    * FIRST choice:
    * TeeRadar's own GPS data.
@@ -7925,6 +7981,100 @@ if (providerGreen) {
 }
 
 function updateGpsDistances(){
+  
+  // =====================================================
+  // ADMIN GREEN CORRECTION — LIVE GPS DISTANCES
+  // =====================================================
+
+  const correctedGps = getBestCurrentHoleGps();
+
+  if (correctedGps?.source === "teeradar-admin") {
+
+    if (!gpsEnabled) return;
+
+    if (!currentGpsPosition) {
+      if (gpsDistanceStatus) {
+        gpsDistanceStatus.textContent = "Waiting for GPS…";
+      }
+      return;
+    }
+
+    const playerLat = Number(currentGpsPosition.latitude);
+    const playerLng = Number(currentGpsPosition.longitude);
+
+    if (
+      !Number.isFinite(playerLat) ||
+      !Number.isFinite(playerLng)
+    ) {
+      return;
+    }
+
+    function correctedDistance(point) {
+      if (!point) return null;
+
+      const lat = Number(point.lat);
+      const lng = Number(point.lng);
+
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng)
+      ) {
+        return null;
+      }
+
+      return Math.round(
+        gpsDistanceBetween(playerLat, playerLng, lat, lng)
+      );
+    }
+
+    const frontM = correctedDistance(correctedGps.front);
+    const middleM = correctedDistance(correctedGps.middle);
+    const backM = correctedDistance(correctedGps.back);
+
+    if (gpsFrontDistance) {
+      gpsFrontDistance.textContent =
+        frontM == null ? "—" : `${frontM}m`;
+    }
+
+    if (gpsMiddleDistance) {
+      gpsMiddleDistance.textContent =
+        middleM == null ? "—" : `${middleM}m`;
+    }
+
+    if (gpsBackDistance) {
+      gpsBackDistance.textContent =
+        backM == null ? "—" : `${backM}m`;
+    }
+
+    if (gpsDistanceStatus) {
+      gpsDistanceStatus.textContent =
+        `Live GPS • Hole ${premiumHoleIndex + 1}`;
+    }
+
+    if (gpsAccuracy) {
+      const accuracy = Number(currentGpsPosition.accuracy);
+
+      gpsAccuracy.textContent =
+        Number.isFinite(accuracy)
+          ? `Location accuracy ±${Math.round(accuracy)}m`
+          : "Live GPS";
+    }
+
+    updateGpsGreenMarker();
+
+    syncTeeRadarLiveActivity().catch(error => {
+      console.error(
+        "Live Activity GPS update failed:",
+        error
+      );
+    });
+
+    return;
+  }
+
+  // No manual correction:
+  // Continue with the existing TeeRadar/GolfAPI logic below.
+
   /*
  * -------------------------------------------------------
  * GOLFAPI.IO FALLBACK
@@ -10399,6 +10549,7 @@ function setLeftPanelsVisibility(show){
   providerGpsCourseId = null;
   providerGpsCourseName = "";
   providerGpsGreens = [];
+      greenAdminCorrections = new Map();
 
   try {
 
@@ -10976,6 +11127,56 @@ console.log(
         ? greensData.holes
         : [];
 
+    // Load TeeRadar's manually corrected green locations.
+const greenCorrections = new Map();
+
+try {
+  const correctionsResponse = await fetch(
+    `${API_BASE}/api/gps/course/${encodeURIComponent(providerId)}/admin-greens`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!correctionsResponse.ok) {
+    throw new Error(
+      `Green corrections HTTP ${correctionsResponse.status}`
+    );
+  }
+
+  const correctionsData = await correctionsResponse.json();
+
+  if (correctionsData.ok && Array.isArray(correctionsData.greens)) {
+    for (const green of correctionsData.greens) {
+      const hole = Number(green.hole_number);
+      const lat = Number(green.latitude);
+      const lng = Number(green.longitude);
+
+      if (
+        Number.isInteger(hole) &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lng)
+      ) {
+        greenCorrections.set(hole, { lat, lng });
+      }
+    }
+  }
+} catch (error) {
+  console.warn(
+    "Unable to load manually corrected green locations:",
+    error
+  );
+}
+
+    // Make saved green corrections available to all GPS functions.
+greenAdminCorrections = greenCorrections;
+
+console.log(
+  "📍 TeeRadar green corrections loaded:",
+  [...greenAdminCorrections.entries()]
+);
 
     providerGpsGreens =
       holes
@@ -16822,6 +17023,7 @@ async function exitRoundMode() {
   providerGpsCourseId = null;
   providerGpsCourseName = "";
   providerGpsGreens = [];
+  greenAdminCorrections = new Map();
 
   providerGpsLoadedForRoundId = null;
   providerGpsLoading = false;
