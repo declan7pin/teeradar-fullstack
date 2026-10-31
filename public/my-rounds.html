@@ -3982,6 +3982,12 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 
   <div class="premGrid">
 
+  <div id="playScorePlayerName"
+       style="position:absolute; top:24px; left:28px;
+              right:85px; font-size:20px; font-weight:800;
+              color:#10262b; z-index:2;">
+  </div>
+
   <!-- Close Hole Score Panel -->
   <button
     id="playScoreCloseBtn"
@@ -10444,19 +10450,9 @@ function setLeftPanelsVisibility(show){
                 .trim()
                 .toLowerCase();
 
-            const hasGps =
-              course?.hasGPS ??
-              course?.has_gps;
-
             return (
-              providerLayout ===
-                wantedLayout &&
-              (
-                hasGps === true ||
-                hasGps === 1 ||
-                hasGps === "1"
-              )
-            );
+  providerLayout === wantedLayout
+);
           }
         ) ||
         null;
@@ -11731,21 +11727,6 @@ async function searchGolfApiCourseFromEnter() {
         10
       );
 
-  if (
-    localMatches.length > 0
-  ) {
-    console.log(
-      "✅ TeeRadar course found locally — GolfAPI search skipped:",
-      query
-    );
-
-    showCourseAutocomplete(
-      localMatches
-    );
-
-    return;
-  }
-
 
   // -------------------------------------------------------
   // 2. NO LOCAL MATCH — SEARCH GOLFAPI.IO
@@ -11806,6 +11787,10 @@ async function searchGolfApiCourseFromEnter() {
         : [];
 
     if (!courses.length) {
+      if (localMatches.length) {
+  showCourseAutocomplete(localMatches);
+  return;
+}
       courseAutoList.innerHTML = `
         <div class="courseOptionCard">
           <div class="courseOptionTitle">
@@ -11897,9 +11882,25 @@ async function searchGolfApiCourseFromEnter() {
         })
         .filter(Boolean);
 
-    showCourseAutocomplete(
-      providerMatches
-    );
+    const localIds = new Set(
+  localMatches
+    .map(course =>
+      String(course?.provider_course_id || "")
+    )
+    .filter(Boolean)
+);
+
+const additionalProviderMatches =
+  providerMatches.filter(course =>
+    !localIds.has(
+      String(course.provider_course_id)
+    )
+  );
+
+showCourseAutocomplete([
+  ...localMatches,
+  ...additionalProviderMatches
+]);
 
   } catch (error) {
     console.error(
@@ -14007,6 +14008,14 @@ const pc = getPlayersCountFromRound(round);
 premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
 const pLabel = playerLabel(premiumPlayerIndex);
 const nextIsPlayer = premiumPlayerIndex < pc - 1;
+
+// Display the selected player's name on the score popup.
+const scorePlayerName =
+  document.getElementById("playScorePlayerName");
+
+if (scorePlayerName) {
+  scorePlayerName.textContent = pLabel;
+}
   // Shot history is linked to the signed-in golfer,
 // not the player currently selected on the scorecard.
 if (
@@ -15828,6 +15837,15 @@ async function saveCurrentHoleCollaboratively(
     );
 
   totalsGrid.innerHTML = "";
+      
+  // Remove any previous totals footer before rebuilding.
+  document
+    .getElementById("scoreTable")
+    ?.querySelector("tfoot")
+    ?.remove();
+
+  const scorecardTotalCells = [];
+
 
   /*
    * Which player belongs to THIS logged-in account?
@@ -15935,7 +15953,38 @@ async function saveCurrentHoleCollaboratively(
     totalsGrid.appendChild(
       pill
     );
+    
+    // Add strokes and putts for this player.
+    scorecardTotalCells.push(
+      `<td>${totals.strokes ?? "—"}</td>`
+    );
+
+    scorecardTotalCells.push(
+      `<td>${totals.putts ?? "—"}</td>`
+    );
+
   }
+
+      
+  // Display totals below the final hole.
+  const scoreTableEl =
+    document.getElementById("scoreTable");
+
+  if (scoreTableEl) {
+    const footer = document.createElement("tfoot");
+
+    footer.innerHTML = `
+      <tr>
+        <td>Total</td>
+        <td>—</td>
+        <td>—</td>
+        ${scorecardTotalCells.join("")}
+      </tr>
+    `;
+
+    scoreTableEl.appendChild(footer);
+  }
+
 
   applyTableScoreColours();
 
@@ -19443,6 +19492,47 @@ html.round-mode #gpsMapCard #gpsMapShotActions {
 #gpsMapBallOnGreenBtn {
   background: #ffffff !important;
   color: #10262b !important;
+}
+
+/* ============================================
+   TEERADAR — SCROLLABLE PLAY SCORECARD
+   ============================================ */
+
+html.round-mode #tableWrap:not(.hidden) {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y !important;
+}
+
+html.round-mode #playScorecardHeader {
+  position: sticky !important;
+  top: 0 !important;
+  flex-shrink: 0 !important;
+  z-index: 20 !important;
+  background: #f5f8f9 !important;
+}
+
+html.round-mode #scoreTable {
+  flex-shrink: 0 !important;
+}
+
+html.round-mode #scoreTable tfoot td {
+  font-weight: 900 !important;
+  background: #e7f0ed !important;
+  color: #10262b !important;
+  border-top: 2px solid #147d59 !important;
+  padding: 14px 2px !important;
+  font-size: 13px !important;
+}
+
+html.round-mode #scoreTable tfoot td:nth-child(3) {
+  display: none !important;
 }
 
 </style>
