@@ -6897,6 +6897,191 @@ function teeAdminGetSavedPoint(hole, teeType) {
 
   return { lat, lng };
 }
+
+    
+ // =========================================================
+ // TEERADAR — ADMIN GREEN LOCATION EDITOR
+ // =========================================================
+
+ let greenAdminEditing = false;
+ let greenAdminPendingPoint = null;
+ let greenAdminPreviewMarker = null;
+ let greenAdminSaving = false;
+
+ function greenAdminClearPreview() {
+   greenAdminPendingPoint = null;
+
+   if (greenAdminPreviewMarker) {
+     greenAdminPreviewMarker.remove();
+     greenAdminPreviewMarker = null;
+   }
+ }
+
+ function greenAdminSetButtonText() {
+   const button =
+     document.getElementById("gpsMapAdminGreenBtn");
+
+   if (!button) return;
+
+   button.textContent = greenAdminSaving
+     ? "Saving Green…"
+     : greenAdminEditing
+       ? "✓ Save Green Location"
+       : "📍 Set Green Location";
+ }
+
+ function greenAdminCancelEditing() {
+   greenAdminEditing = false;
+   greenAdminClearPreview();
+   greenAdminSetButtonText();
+ }
+
+ async function greenAdminSavePoint() {
+   if (greenAdminSaving) return false;
+
+   const courseId = providerGpsCourseId;
+   const hole = Number(premiumHoleIndex) + 1;
+   const point = greenAdminPendingPoint;
+   const token = getToken();
+
+   if (!courseId || !token) {
+     alert("A valid course and login are required.");
+     return false;
+   }
+
+   if (!point) {
+     alert("Tap the centre of the green on the map first.");
+     return false;
+   }
+
+   if (
+     !Number.isInteger(hole) ||
+     hole < 1 ||
+     hole > 36
+   ) {
+     alert("Invalid hole selected.");
+     return false;
+   }
+
+   greenAdminSaving = true;
+   greenAdminSetButtonText();
+
+   try {
+     const response = await fetch(
+       `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/admin-greens/${hole}`,
+       {
+         method: "PUT",
+         headers: {
+           Authorization: `Bearer ${token}`,
+           "Content-Type": "application/json"
+         },
+         body: JSON.stringify({
+           lat: point.lat,
+           lng: point.lng
+         })
+       }
+     );
+
+     const data = await response.json();
+
+     if (!response.ok || !data.ok) {
+       throw new Error(
+         data.error || "Unable to save green location"
+       );
+     }
+
+     greenAdminCancelEditing();
+
+     alert(
+       `Green location saved for hole ${hole}.`
+     );
+
+     return true;
+
+   } catch (error) {
+     console.error(
+       "Unable to save green location:",
+       error
+     );
+
+     alert(error.message || "Unable to save green.");
+     return false;
+
+   } finally {
+     greenAdminSaving = false;
+     greenAdminSetButtonText();
+   }
+ }
+
+ function greenAdminInitialiseButton() {
+   const shotActions =
+     document.getElementById("gpsMapShotActions");
+
+   if (!shotActions) return;
+
+   const user = decodeJwtPayload(getToken());
+
+   const isAdmin =
+     String(user?.email || "")
+       .trim()
+       .toLowerCase() === "declan7pin@gmail.com";
+
+   if (!isAdmin) {
+     document.getElementById(
+       "gpsMapAdminGreenBtn"
+     )?.remove();
+     return;
+   }
+
+   if (document.getElementById(
+     "gpsMapAdminGreenBtn"
+   )) {
+     return;
+   }
+
+   const button = document.createElement("button");
+
+   button.id = "gpsMapAdminGreenBtn";
+   button.type = "button";
+   button.textContent = "📍 Set Green Location";
+
+   button.style.cssText = `
+     background: #ffffff !important;
+     color: #10262b !important;
+     border: 1px solid #d4ded9 !important;
+   `;
+
+   button.addEventListener("click", async () => {
+     if (greenAdminSaving) return;
+
+     if (!greenAdminEditing) {
+       if (teeAdminEditing) {
+         alert("Finish tee editing first.");
+         return;
+       }
+
+       if (!providerGpsCourseId) {
+         alert("Load a course with GPS data first.");
+         return;
+       }
+
+       greenAdminClearPreview();
+       greenAdminEditing = true;
+       greenAdminSetButtonText();
+
+       alert(
+         "Tap the centre of the green on the satellite map."
+       );
+
+       return;
+     }
+
+     await greenAdminSavePoint();
+   });
+
+   shotActions.appendChild(button);
+ }
+
 function teeAdminInitialiseControls() {
   const panel = document.getElementById("teeAdminPanel");
   const toggle = document.getElementById("teeEditToggle");
@@ -6924,7 +7109,10 @@ function teeAdminInitialiseControls() {
 
   panel.style.display = "";
 
-  // Add an admin-only tee editing button to the GPS map.
+// Initialise the admin-only green editing button.
+greenAdminInitialiseButton();
+
+// Add an admin-only tee editing button to the GPS map.
   const shotActions = document.getElementById("gpsMapShotActions");
 
   if (
@@ -8630,6 +8818,76 @@ gpsMap.on(
     ) {
       return;
     }
+
+    
+    // =====================================================
+    // ADMIN GREEN EDITOR — MAP TAP
+    // =====================================================
+
+    if (greenAdminEditing) {
+      const latitude = Number(event.latlng.lat);
+      const longitude = Number(event.latlng.lng);
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        return;
+      }
+
+      greenAdminPendingPoint = {
+        lat: latitude,
+        lng: longitude
+      };
+
+      if (!greenAdminPreviewMarker) {
+        const previewIcon = window.L.divIcon({
+          className: "",
+          html: `
+            <div style="
+              width:20px;
+              height:20px;
+              background:#ef4444;
+              border:3px solid white;
+              border-radius:50%;
+              box-shadow:0 0 8px rgba(0,0,0,.6);
+            "></div>
+          `,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+
+        greenAdminPreviewMarker = window.L.marker(
+          [latitude, longitude],
+          {
+            icon: previewIcon,
+            zIndexOffset: 1600,
+            interactive: false
+          }
+        ).addTo(gpsMap);
+
+      } else {
+        greenAdminPreviewMarker.setLatLng([
+          latitude,
+          longitude
+        ]);
+      }
+
+      console.log(
+        "📍 Green location selected:",
+        {
+          courseId: providerGpsCourseId,
+          hole: Number(premiumHoleIndex) + 1,
+          latitude,
+          longitude
+        }
+      );
+
+      // Prevent normal GPS distance measuring.
+      return;
+    }
+
+
 
     // =====================================================
     // ADMIN TEE EDITOR — MAP TAP
