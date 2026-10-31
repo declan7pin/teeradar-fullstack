@@ -3982,6 +3982,12 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 
   <div class="premGrid">
 
+  <div id="playScorePlayerName"
+       style="position:absolute; top:24px; left:28px;
+              right:85px; font-size:20px; font-weight:800;
+              color:#10262b; z-index:2;">
+  </div>
+
   <!-- Close Hole Score Panel -->
   <button
     id="playScoreCloseBtn"
@@ -14002,6 +14008,14 @@ const pc = getPlayersCountFromRound(round);
 premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
 const pLabel = playerLabel(premiumPlayerIndex);
 const nextIsPlayer = premiumPlayerIndex < pc - 1;
+
+// Display the selected player's name on the score popup.
+const scorePlayerName =
+  document.getElementById("playScorePlayerName");
+
+if (scorePlayerName) {
+  scorePlayerName.textContent = pLabel;
+}
   // Shot history is linked to the signed-in golfer,
 // not the player currently selected on the scorecard.
 if (
