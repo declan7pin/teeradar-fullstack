@@ -15837,6 +15837,15 @@ async function saveCurrentHoleCollaboratively(
     );
 
   totalsGrid.innerHTML = "";
+      
+  // Remove any previous totals footer before rebuilding.
+  document
+    .getElementById("scoreTable")
+    ?.querySelector("tfoot")
+    ?.remove();
+
+  const scorecardTotalCells = [];
+
 
   /*
    * Which player belongs to THIS logged-in account?
@@ -15944,7 +15953,38 @@ async function saveCurrentHoleCollaboratively(
     totalsGrid.appendChild(
       pill
     );
+    
+    // Add strokes and putts for this player.
+    scorecardTotalCells.push(
+      `<td>${totals.strokes ?? "—"}</td>`
+    );
+
+    scorecardTotalCells.push(
+      `<td>${totals.putts ?? "—"}</td>`
+    );
+
   }
+
+      
+  // Display totals below the final hole.
+  const scoreTableEl =
+    document.getElementById("scoreTable");
+
+  if (scoreTableEl) {
+    const footer = document.createElement("tfoot");
+
+    footer.innerHTML = `
+      <tr>
+        <td>Total</td>
+        <td>—</td>
+        <td>—</td>
+        ${scorecardTotalCells.join("")}
+      </tr>
+    `;
+
+    scoreTableEl.appendChild(footer);
+  }
+
 
   applyTableScoreColours();
 
@@ -19452,6 +19492,47 @@ html.round-mode #gpsMapCard #gpsMapShotActions {
 #gpsMapBallOnGreenBtn {
   background: #ffffff !important;
   color: #10262b !important;
+}
+
+/* ============================================
+   TEERADAR — SCROLLABLE PLAY SCORECARD
+   ============================================ */
+
+html.round-mode #tableWrap:not(.hidden) {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y !important;
+}
+
+html.round-mode #playScorecardHeader {
+  position: sticky !important;
+  top: 0 !important;
+  flex-shrink: 0 !important;
+  z-index: 20 !important;
+  background: #f5f8f9 !important;
+}
+
+html.round-mode #scoreTable {
+  flex-shrink: 0 !important;
+}
+
+html.round-mode #scoreTable tfoot td {
+  font-weight: 900 !important;
+  background: #e7f0ed !important;
+  color: #10262b !important;
+  border-top: 2px solid #147d59 !important;
+  padding: 14px 2px !important;
+  font-size: 13px !important;
+}
+
+html.round-mode #scoreTable tfoot td:nth-child(3) {
+  display: none !important;
 }
 
 </style>
