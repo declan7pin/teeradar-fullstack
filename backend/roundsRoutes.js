@@ -2980,6 +2980,177 @@ router.post("/:id/shots", requireAuth, async (req, res) => {
   }
 });
 
+// -------------------------------------------------
+// MY STATS — TRACKED CLUB SHOTS
+// -------------------------------------------------
+router.get("/stats/club-shots", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised"
+      });
+    }
+
+    await ensureRoundShotsTable();
+    await ensureRoundShotGreensTable();
+
+    const result = await db.query(`
+      SELECT
+        s.id,
+        s.round_id,
+        s.hole_number,
+        s.club,
+        s.latitude,
+        s.longitude,
+        s.created_at,
+        LEAD(s.latitude) OVER (
+          PARTITION BY s.round_id, s.user_id, s.hole_number
+          ORDER BY s.created_at, s.id
+        ) AS next_latitude,
+        LEAD(s.longitude) OVER (
+          PARTITION BY s.round_id, s.user_id, s.hole_number
+          ORDER BY s.created_at, s.id
+        ) AS next_longitude,
+        g.latitude AS green_latitude,
+        g.longitude AS green_longitude
+      FROM round_shots s
+      LEFT JOIN round_shot_greens g
+        ON g.round_id = s.round_id
+        AND g.user_id = s.user_id
+        AND g.hole_number = s.hole_number
+      WHERE s.user_id = $1
+      ORDER BY s.created_at, s.id
+    `, [userId]);
+
+    function distanceMetres(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const rad = Math.PI / 180;
+
+      const dLat = (lat2 - lat1) * rad;
+      const dLon = (lon2 - lon1) * rad;
+
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * rad) *
+        Math.cos(lat2 * rad) *
+        Math.sin(dLon / 2) ** 2;
+
+      return R * 2 * Math.atan2(
+        Math.sqrt(a),
+        Math.sqrt(Math.max(0, 1 - a))
+      );
+    }
+
+    const clubs = new Map();
+    let totalShots = 0;
+    let longestShot = 0;
+
+    for (const shot of result.rows) {
+      const club = String(shot.club || "").trim();
+      if (!club) continue;
+
+      totalShots++;
+
+      if (!clubs.has(club)) {
+        clubs.set(club, {
+          club,
+          times_used: 0,
+          measured_shots: 0,
+          total_distance: 0,
+          longest_shot: 0,
+          history: []
+        });
+      }
+
+      const stats = clubs.get(club);
+      stats.times_used++;
+
+      const nextLat = shot.next_latitude ?? shot.green_latitude;
+      const nextLon = shot.next_longitude ?? shot.green_longitude;
+
+      let distance = null;
+
+      if (nextLat != null && nextLon != null) {
+        distance = distanceMetres(
+          Number(shot.latitude),
+          Number(shot.longitude),
+          Number(nextLat),
+          Number(nextLon)
+        );
+      }
+
+      // Ignore missing, zero and implausible GPS distances.
+      if (
+        distance != null &&
+        Number.isFinite(distance) &&
+        distance > 0 &&
+        distance <= 500
+      ) {
+        stats.measured_shots++;
+        stats.total_distance += distance;
+        stats.longest_shot = Math.max(
+          stats.longest_shot,
+          distance
+        );
+
+        longestShot = Math.max(longestShot, distance);
+      } else {
+        distance = null;
+      }
+
+      stats.history.push({
+        shot_id: shot.id,
+        round_id: shot.round_id,
+        hole_number: shot.hole_number,
+        date: shot.created_at,
+        distance_metres:
+          distance == null ? null : Math.round(distance)
+      });
+    }
+
+    const clubStats = [...clubs.values()].map(stats => ({
+      club: stats.club,
+      times_used: stats.times_used,
+      measured_shots: stats.measured_shots,
+      average_distance_metres: stats.measured_shots
+        ? Math.round(
+            stats.total_distance / stats.measured_shots
+          )
+        : null,
+      longest_shot_metres: stats.measured_shots
+        ? Math.round(stats.longest_shot)
+        : null,
+      history: stats.history.reverse()
+    }));
+
+    clubStats.sort((a, b) =>
+      b.times_used - a.times_used ||
+      a.club.localeCompare(b.club)
+    );
+
+    return res.json({
+      ok: true,
+      total_tracked_shots: result.rows.length,
+      shots_with_club: totalShots,
+      clubs_used: clubStats.length,
+      longest_shot_metres:
+        longestShot > 0 ? Math.round(longestShot) : null,
+      clubs: clubStats
+    });
+
+  } catch (err) {
+    console.error("Club stats error:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error"
+    });
+  }
+});
+
 // GET MY SHOTS FOR A ROUND
 router.get("/:id/shots", requireAuth, async (req, res) => {
   try {
