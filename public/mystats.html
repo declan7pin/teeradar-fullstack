@@ -1969,6 +1969,172 @@ holes = r.holesData.map((h, idx) => ({
       `;
     }
 
+  
+// =========================================
+// TRACKED SHOTS — CLUB STATISTICS
+// =========================================
+
+let trackedClubStats = [];
+let selectedTrackedClub = null;
+
+function trackedDistanceLabel(value) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  const n = Number(value);
+  return Number.isFinite(n) ? `${Math.round(n)} m` : "—";
+}
+
+function showTrackedClubDetails(clubName) {
+  const club = trackedClubStats.find(c => c.club === clubName);
+  const details = document.getElementById("trackedClubDetails");
+
+  if (!club) {
+    details.style.display = "none";
+    return;
+  }
+
+  selectedTrackedClub = clubName;
+  details.style.display = "block";
+
+  document.getElementById("trackedClubTitle").textContent =
+    `${club.club} — Shot Statistics`;
+
+  document.getElementById("trackedClubAverage").textContent =
+    trackedDistanceLabel(club.average_distance_metres);
+
+  document.getElementById("trackedClubLongest").textContent =
+    trackedDistanceLabel(club.longest_shot_metres);
+
+  document.getElementById("trackedClubUses").textContent =
+    club.times_used ?? 0;
+
+  const history = document.getElementById("trackedClubHistory");
+  const shots = Array.isArray(club.history) ? club.history : [];
+
+  if (!shots.length) {
+    history.textContent = "No recorded shots for this club.";
+    return;
+  }
+
+  history.innerHTML = shots.map(shot => {
+    const date = parseDateMaybe(shot.date);
+    const dateText = date ? dateLabel(date) : "Unknown date";
+
+    return `
+      <div class="row">
+        <div class="left">
+          <div style="font-weight:900">
+            ${escapeHtml(dateText)}
+          </div>
+          <div class="mini">
+            Hole ${escapeHtml(shot.hole_number ?? "—")}
+          </div>
+        </div>
+        <div class="right">
+          ${escapeHtml(trackedDistanceLabel(shot.distance_metres))}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadTrackedClubStats() {
+  const body = document.getElementById("trackedClubsBody");
+
+  body.innerHTML = `
+    <tr>
+      <td colspan="3" class="muted">
+        Loading tracked shot statistics...
+      </td>
+    </tr>
+  `;
+
+  try {
+    const data = await api("/api/rounds/stats/club-shots", {
+      method: "GET"
+    });
+
+    if (!data?.ok) {
+      throw new Error(data?.error || "Unable to load club statistics");
+    }
+
+    trackedClubStats = Array.isArray(data.clubs) ? data.clubs : [];
+
+    document.getElementById("trackedTotalShots").textContent =
+      data.total_tracked_shots ?? 0;
+
+    document.getElementById("trackedClubsUsed").textContent =
+      data.clubs_used ?? 0;
+
+    document.getElementById("trackedLongestShot").textContent =
+      trackedDistanceLabel(data.longest_shot_metres);
+
+    if (!trackedClubStats.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="3" class="muted">
+            No clubs recorded yet. Start tracking shots during a round
+            and select your clubs to build your statistics.
+          </td>
+        </tr>
+      `;
+
+      document.getElementById("trackedClubDetails").style.display = "none";
+      return;
+    }
+
+    body.innerHTML = trackedClubStats.map((club, index) => `
+      <tr>
+        <td>
+          <button
+            type="button"
+            class="btn"
+            data-tracked-club-index="${index}"
+            style="padding:7px 12px;min-height:36px;"
+          >
+            ${escapeHtml(club.club)}
+          </button>
+        </td>
+        <td class="nowrap">
+          ${escapeHtml(trackedDistanceLabel(club.average_distance_metres))}
+        </td>
+        <td class="nowrap">
+          ${escapeHtml(club.times_used ?? 0)}
+        </td>
+      </tr>
+    `).join("");
+
+    body.querySelectorAll("[data-tracked-club-index]").forEach(button => {
+      button.addEventListener("click", () => {
+        const index = Number(button.dataset.trackedClubIndex);
+        const club = trackedClubStats[index];
+
+        if (club) {
+          showTrackedClubDetails(club.club);
+        }
+      });
+    });
+
+    if (selectedTrackedClub) {
+      showTrackedClubDetails(selectedTrackedClub);
+    }
+
+  } catch (error) {
+    console.error("Tracked club statistics failed:", error);
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="3" class="muted">
+          Unable to load club statistics. Please try refreshing.
+        </td>
+      </tr>
+    `;
+  }
+}
+
+
     // =========================================
 // MY STATS MAIN TAB NAVIGATION
 // =========================================
@@ -2016,8 +2182,9 @@ document.getElementById("roundStatsTab")
   });
 
 document.getElementById("trackedShotsTab")
-  .addEventListener("click", () => {
+  .addEventListener("click", async () => {
     switchMyStatsTab("tracked");
+    await loadTrackedClubStats();
   });
 
 
@@ -2199,11 +2366,17 @@ document.getElementById("clearCustomRangeBtn").addEventListener("click", () => {
   applyRange();
 });
 
-    document.getElementById("refreshBtn").addEventListener("click", refresh);
-
-    /* ✅✅✅ ONLY CHANGE (needed): initial refresh is async ✅✅✅ */
-    refresh();
-    /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
+    document.getElementById("refreshBtn").addEventListener("click", async () => {
+  await refresh();
+  await loadTrackedClubStats();
+});
+  
+    /* Load round statistics and tracked club statistics */
+(async function initialiseMyStats() {
+  await refresh();
+  await loadTrackedClubStats();
+})();
+  
   </script>
 
   <!-- ✅ close the #app wrapper -->
