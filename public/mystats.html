@@ -686,6 +686,44 @@ body.stats-loading #statsContent{
 
 <div id="statsContent">
 
+  <!-- ========================================= -->
+  <!-- MY STATS MAIN NAVIGATION -->
+  <!-- ========================================= -->
+
+  <div class="card" style="margin-bottom:12px;">
+
+    <div class="tabs" role="tablist"
+         aria-label="My Stats sections"
+         style="margin-top:0;">
+
+      <button
+        class="tab active"
+        id="roundStatsTab"
+        type="button"
+        role="tab"
+        aria-selected="true">
+        Round Stats
+      </button>
+
+      <button
+        class="tab"
+        id="trackedShotsTab"
+        type="button"
+        role="tab"
+        aria-selected="false">
+        Tracked Shots
+      </button>
+
+    </div>
+
+  </div>
+
+  <!-- ========================================= -->
+  <!-- EXISTING ROUND STATS -->
+  <!-- ========================================= -->
+
+  <div id="roundStatsSection">
+
     <div class="card">
       <div class="pill" id="rangePill">Range: Last 5 rounds</div>
 
@@ -899,13 +937,123 @@ body.stats-loading #statsContent{
           <tbody id="hardHolesBody"></tbody>
         </table>
       </div>
+        </div>
+
+  </div> <!-- /roundStatsSection -->
+
+
+  <!-- ========================================= -->
+  <!-- TRACKED SHOTS SECTION -->
+  <!-- ========================================= -->
+
+  <div id="trackedShotsSection" style="display:none;">
+
+    <div class="card">
+
+      <h2>Club Statistics</h2>
+
+      <div class="mini">
+        Your club performance based on GPS tracked shots.
+        Distances represent total shot distance.
+      </div>
+
+      <div class="kpis">
+
+        <div class="kpi">
+          <div class="label">Total tracked shots</div>
+          <div class="value" id="trackedTotalShots">—</div>
+          <div class="hint">Shots recorded using GPS tracking</div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Clubs used</div>
+          <div class="value" id="trackedClubsUsed">—</div>
+          <div class="hint">Different clubs recorded</div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Longest shot</div>
+          <div class="value" id="trackedLongestShot">—</div>
+          <div class="hint">Longest valid GPS shot distance</div>
+        </div>
+
+      </div>
+
+      <div class="sectionTitle">
+        Club Distance Breakdown
+      </div>
+
+      <div class="mini">
+        Average distance and total times each club has been used.
+      </div>
+
+      <div style="overflow-x:auto;">
+
+        <table>
+          <thead>
+            <tr>
+              <th>Club</th>
+              <th class="nowrap">Avg distance</th>
+              <th class="nowrap">Times used</th>
+            </tr>
+          </thead>
+
+          <tbody id="trackedClubsBody">
+            <tr>
+              <td colspan="3" class="muted">
+                Loading tracked shot statistics...
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+
+      </div>
+
     </div>
 
-  </div> <!-- /statsContent -->
+    <!-- SELECTED CLUB DETAILS -->
 
-  </div> <!-- ✅ keep this line; we’ll close #app properly below -->
+    <div class="card" id="trackedClubDetails"
+         style="margin-top:12px;display:none;">
 
-  <script>
+      <h2 id="trackedClubTitle">Club Details</h2>
+
+      <div class="kpis">
+
+        <div class="kpi">
+          <div class="label">Average distance</div>
+          <div class="value" id="trackedClubAverage">—</div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Longest shot</div>
+          <div class="value" id="trackedClubLongest">—</div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Times used</div>
+          <div class="value" id="trackedClubUses">—</div>
+        </div>
+
+      </div>
+
+      <div class="sectionTitle">Recent Shot Distances</div>
+
+      <div id="trackedClubHistory" class="mini">
+        Select a club to view its shot history.
+      </div>
+
+    </div>
+
+  </div> <!-- /trackedShotsSection -->
+
+
+</div> <!-- /statsContent -->
+
+</div> <!-- /app -->
+
+<script>
     const API_BASE = "https://teeradar.com.au";
 
     /* ✅✅✅ ONLY CHANGES BELOW ✅✅✅ */
@@ -1821,8 +1969,60 @@ holes = r.holesData.map((h, idx) => ({
       `;
     }
 
-    // ---------- Render ----------
-    let ALL = [];
+    // =========================================
+// MY STATS MAIN TAB NAVIGATION
+// =========================================
+
+function switchMyStatsTab(tab) {
+
+  const roundTab =
+    document.getElementById("roundStatsTab");
+
+  const trackedTab =
+    document.getElementById("trackedShotsTab");
+
+  const roundSection =
+    document.getElementById("roundStatsSection");
+
+  const trackedSection =
+    document.getElementById("trackedShotsSection");
+
+  const showTracked = tab === "tracked";
+
+  roundSection.style.display =
+    showTracked ? "none" : "block";
+
+  trackedSection.style.display =
+    showTracked ? "block" : "none";
+
+  roundTab.classList.toggle("active", !showTracked);
+  trackedTab.classList.toggle("active", showTracked);
+
+  roundTab.setAttribute(
+    "aria-selected",
+    String(!showTracked)
+  );
+
+  trackedTab.setAttribute(
+    "aria-selected",
+    String(showTracked)
+  );
+
+}
+
+document.getElementById("roundStatsTab")
+  .addEventListener("click", () => {
+    switchMyStatsTab("round");
+  });
+
+document.getElementById("trackedShotsTab")
+  .addEventListener("click", () => {
+    switchMyStatsTab("tracked");
+  });
+
+
+// ---------- Render ----------
+let ALL = [];
     let currentRange = "last5";
     let customStartDate = "";
 let customEndDate = "";
