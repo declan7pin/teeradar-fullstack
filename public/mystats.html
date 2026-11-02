@@ -1057,11 +1057,31 @@ body.stats-loading #statsContent{
   </div>
 </div>
 
+
+<div class="sectionTitle">Shot Distance History</div>
+
+<div style="
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:12px;
+  margin-bottom:20px;
+">
+  <div id="trackedClubDistanceChart" style="
+    width:100%;
+    min-height:180px;
+    overflow:hidden;
+  ">
+    Select a club to view its distance graph.
+  </div>
+</div>
+
 <div class="sectionTitle">Recent Shot Distances</div>
 
 <div id="trackedClubHistory" class="mini">
   Select a club to view its shot history.
 </div>
+
 
 
     </div>
@@ -2006,6 +2026,129 @@ function trackedDistanceLabel(value) {
   return Number.isFinite(n) ? `${Math.round(n)} m` : "—";
 }
 
+
+function renderTrackedClubDistanceChart(club) {
+  const container = document.getElementById("trackedClubDistanceChart");
+  if (!container) return;
+
+  const shots = (Array.isArray(club.history) ? club.history : [])
+    .filter(shot =>
+      shot.distance_metres !== null &&
+      shot.distance_metres !== undefined &&
+      shot.distance_metres !== "" &&
+      Number.isFinite(Number(shot.distance_metres)) &&
+      Number(shot.distance_metres) > 0
+    )
+    .reverse();
+
+  if (!shots.length) {
+    container.textContent = "No measured shots available for this club.";
+    return;
+  }
+
+  const distances = shots.map(shot => Number(shot.distance_metres));
+
+  const average = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+
+  const sorted = [...distances].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+
+  const width = 600;
+  const height = 270;
+  const left = 48;
+  const right = 20;
+  const top = 20;
+  const bottom = 40;
+
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+
+  const maxDistance = Math.max(50, ...distances, average, median);
+  const yMax = Math.ceil((maxDistance + 15) / 25) * 25;
+
+  const x = index =>
+    left + (distances.length === 1
+      ? plotWidth / 2
+      : index * plotWidth / (distances.length - 1));
+
+  const y = distance =>
+    top + plotHeight - (distance / yMax) * plotHeight;
+
+  const grid = Array.from({ length: 5 }, (_, i) => {
+    const value = yMax * i / 4;
+    const py = y(value);
+
+    return `
+      <line x1="${left}" y1="${py}" x2="${width - right}"
+        y2="${py}" stroke="#e5e7eb" stroke-width="1"/>
+      <text x="${left - 8}" y="${py + 4}"
+        text-anchor="end" font-size="11" fill="#64748b">
+        ${Math.round(value)}
+      </text>
+    `;
+  }).join("");
+
+  const points = distances
+    .map((distance, index) => `${x(index)},${y(distance)}`)
+    .join(" ");
+
+  const circles = distances.map((distance, index) => `
+    <circle cx="${x(index)}" cy="${y(distance)}" r="5"
+      fill="#0f766e" stroke="white" stroke-width="2">
+      <title>Shot ${index + 1}: ${Math.round(distance)} m</title>
+    </circle>
+  `).join("");
+
+  container.innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;
+      margin-bottom:12px;font-size:13px;font-weight:700;">
+      <span style="color:#2563eb">
+        ━ Average: ${Math.round(average)} m
+      </span>
+      <span style="color:#16a34a">
+        ━ Median: ${Math.round(median)} m
+      </span>
+      <span style="color:#64748b">
+        ${distances.length} measured shots
+      </span>
+    </div>
+
+    <svg viewBox="0 0 ${width} ${height}"
+      style="width:100%;height:auto;display:block;"
+      role="img"
+      aria-label="Shot distances with average and median reference lines">
+
+      ${grid}
+
+      <line x1="${left}" y1="${y(average)}"
+        x2="${width - right}" y2="${y(average)}"
+        stroke="#2563eb" stroke-width="2"
+        stroke-dasharray="8 5"/>
+
+      <line x1="${left}" y1="${y(median)}"
+        x2="${width - right}" y2="${y(median)}"
+        stroke="#16a34a" stroke-width="2"
+        stroke-dasharray="4 4"/>
+
+      <polyline points="${points}"
+        fill="none" stroke="#0f766e"
+        stroke-width="2.5" stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+      ${circles}
+
+      <text x="${width / 2}" y="${height - 6}"
+        text-anchor="middle" font-size="12" fill="#64748b">
+        Tracked shots (oldest to newest)
+      </text>
+    </svg>
+  `;
+}
+
+
 function showTrackedClubDetails(clubName) {
   const club = trackedClubStats.find(c => c.club === clubName);
   const details = document.getElementById("trackedClubDetails");
@@ -2030,8 +2173,14 @@ function showTrackedClubDetails(clubName) {
   document.getElementById("trackedClubUses").textContent =
     club.times_used ?? 0;
 
+  
+  // Update the distance graph for the selected club
+  renderTrackedClubDistanceChart(club);
+
+  // Keep the existing shot history underneath
   const history = document.getElementById("trackedClubHistory");
   const shots = Array.isArray(club.history) ? club.history : [];
+
 
   if (!shots.length) {
     history.textContent = "No recorded shots for this club.";
