@@ -1048,16 +1048,8 @@ body.stats-loading #statsContent{
   padding:12px;
   margin-bottom:20px;
 ">
-  <div id="trackedClubDistanceChart" style="
-    width:100%;
-    min-height:180px;
-    overflow:hidden;
-  ">
-    Select a club to view its distance graph.
-  </div>
-</div>
-
-
+  
+<!-- SHOT DISTANCE GRAPH -->
 <div class="sectionTitle">Shot Distance History</div>
 
 <div style="
@@ -1076,11 +1068,72 @@ body.stats-loading #statsContent{
   </div>
 </div>
 
+<!-- CLUB DISTANCE CONSISTENCY -->
+<div style="
+  margin:18px 0;
+  padding:16px;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+">
+  <div class="sectionTitle" style="margin-top:0;">
+    Distance Consistency
+  </div>
+
+  <div style="
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin:12px 0;
+  ">
+    <div>
+      <div id="trackedClubConsistency"
+        style="font-size:28px;font-weight:900;">
+        —
+      </div>
+
+      <div id="trackedClubConsistencyRating" class="mini">
+        Select a club
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <div class="mini">Typical spread</div>
+      <div id="trackedClubSpread"
+        style="font-size:22px;font-weight:800;">
+        —
+      </div>
+    </div>
+  </div>
+
+  <div style="
+    height:10px;
+    background:#e5e7eb;
+    border-radius:999px;
+    overflow:hidden;
+  ">
+    <div id="trackedClubConsistencyBar" style="
+      width:0%;
+      height:100%;
+      background:#16a34a;
+      border-radius:999px;
+      transition:width .3s ease;
+    "></div>
+  </div>
+
+  <div class="mini" style="margin-top:10px;">
+    Based on your GPS-tracked shot distances.
+    Minimum 5 measured shots required.
+  </div>
+</div>
+
+<!-- RECENT SHOT HISTORY -->
 <div class="sectionTitle">Recent Shot Distances</div>
 
 <div id="trackedClubHistory" class="mini">
   Select a club to view its shot history.
 </div>
+
 
 
 
@@ -2149,6 +2202,81 @@ function renderTrackedClubDistanceChart(club) {
 }
 
 
+function renderTrackedClubConsistency(club) {
+  const scoreEl = document.getElementById("trackedClubConsistency");
+  const ratingEl = document.getElementById("trackedClubConsistencyRating");
+  const spreadEl = document.getElementById("trackedClubSpread");
+  const barEl = document.getElementById("trackedClubConsistencyBar");
+
+  if (!scoreEl || !ratingEl || !spreadEl || !barEl) return;
+
+  const distances = (Array.isArray(club.history) ? club.history : [])
+    .filter(shot =>
+      shot.distance_metres !== null &&
+      shot.distance_metres !== undefined &&
+      shot.distance_metres !== "" &&
+      Number.isFinite(Number(shot.distance_metres)) &&
+      Number(shot.distance_metres) > 0
+    )
+    .map(shot => Number(shot.distance_metres));
+
+  if (distances.length < 5) {
+    scoreEl.textContent = "—";
+    ratingEl.textContent = `Need ${5 - distances.length} more measured shots`;
+    spreadEl.textContent = "—";
+    barEl.style.width = "0%";
+    return;
+  }
+
+  const average =
+    distances.reduce((sum, distance) => sum + distance, 0) /
+    distances.length;
+
+  const variance =
+    distances.reduce(
+      (sum, distance) => sum + Math.pow(distance - average, 2),
+      0
+    ) / distances.length;
+
+  const standardDeviation = Math.sqrt(variance);
+
+  const consistency = Math.max(
+    0,
+    Math.min(100, (1 - standardDeviation / average) * 100)
+  );
+
+  let rating;
+  let colour;
+
+  if (consistency >= 90) {
+    rating = "Excellent";
+    colour = "#16a34a";
+  } else if (consistency >= 80) {
+    rating = "Very consistent";
+    colour = "#22c55e";
+  } else if (consistency >= 70) {
+    rating = "Consistent";
+    colour = "#ca8a04";
+  } else if (consistency >= 60) {
+    rating = "Variable";
+    colour = "#f97316";
+  } else {
+    rating = "Inconsistent";
+    colour = "#dc2626";
+  }
+
+  scoreEl.textContent = `${Math.round(consistency)}%`;
+  ratingEl.textContent = rating;
+  ratingEl.style.color = colour;
+
+  spreadEl.textContent = `±${Math.round(standardDeviation)} m`;
+
+  barEl.style.width = `${consistency}%`;
+  barEl.style.background = colour;
+}
+
+
+
 function showTrackedClubDetails(clubName) {
   const club = trackedClubStats.find(c => c.club === clubName);
   const details = document.getElementById("trackedClubDetails");
@@ -2176,6 +2304,7 @@ function showTrackedClubDetails(clubName) {
   
   // Update the distance graph for the selected club
   renderTrackedClubDistanceChart(club);
+  renderTrackedClubConsistency(club);
 
   // Keep the existing shot history underneath
   const history = document.getElementById("trackedClubHistory");
@@ -2229,7 +2358,22 @@ async function loadTrackedClubStats() {
       throw new Error(data?.error || "Unable to load club statistics");
     }
 
-    trackedClubStats = Array.isArray(data.clubs) ? data.clubs : [];
+    
+trackedClubStats = Array.isArray(data.clubs)
+  ? [...data.clubs].sort((a, b) => {
+      const avgA = Number(a.average_distance_metres);
+      const avgB = Number(b.average_distance_metres);
+
+      const distanceA = Number.isFinite(avgA) && a.average_distance_metres != null
+        ? avgA : -1;
+
+      const distanceB = Number.isFinite(avgB) && b.average_distance_metres != null
+        ? avgB : -1;
+
+      return distanceB - distanceA;
+    })
+  : [];
+
 
     document.getElementById("trackedTotalShots").textContent =
       data.total_tracked_shots ?? 0;
