@@ -17117,9 +17117,27 @@ if (roundModeExitBtn) {
 
     async function loadRound(id) {
   /*
-   * Reset play position before opening another round.
+   * Check whether a specific hole was requested
+   * from My Stats shot history.
+   *
+   * Normal scorecard opening remains unchanged.
    */
-  premiumHoleIndex = 0;
+  const requestedHole = Number(
+    new URLSearchParams(window.location.search).get("hole")
+  );
+
+  const hasRequestedHole =
+    Number.isInteger(requestedHole) &&
+    requestedHole >= 1 &&
+    requestedHole <= 18;
+
+  /*
+   * Set the requested hole, or default to Hole 1.
+   */
+  premiumHoleIndex = hasRequestedHole
+    ? requestedHole - 1
+    : 0;
+
   premiumPlayerIndex = 0;
   premiumShowingTable = false;
 
@@ -17377,19 +17395,19 @@ if (roundModeExitBtn) {
 
   renderPlayerNamesUI();
 
-  /*
-   * This is an initial open/resume, so find the first
-   * incomplete hole once.
+    /*
+   * Normal opening:
+   * Automatically select the first incomplete hole.
    *
-   * Live sync must never do this later.
+   * Opening from My Stats:
+   * Preserve the requested hole instead.
    */
   shouldAutoOpenCurrentHole =
-    true;
+    !hasRequestedHole;
 
   await renderScorecard(
     round
   );
-}
 
     async function createRound(){
   const course = String(courseEl.value || "").trim();
