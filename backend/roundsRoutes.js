@@ -3174,9 +3174,11 @@ if (validDistance && includeInAverage) {
   );
 }
 
-     stats.history.push({
-  shot_id: shot.id,
+     
+stats.history.push({
+  id: shot.id,
   round_id: shot.round_id,
+
   hole_number: shot.hole_number,
   date: shot.created_at,
 
