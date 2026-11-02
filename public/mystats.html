@@ -2621,22 +2621,14 @@ history.innerHTML = shots.map(shot => {
   const canEdit = Number.isSafeInteger(shotId) && shotId > 0;
 
   return `
-    <button
-      type="button"
+    <div
       class="row"
-      data-classify-shot-id="${canEdit ? shotId : ""}"
-      ${canEdit ? "" : "disabled"}
       style="
         width:100%;
-        background:transparent;
         border-left:0;
         border-right:0;
         border-bottom:0;
         border-radius:0;
-        text-align:left;
-        cursor:${canEdit ? "pointer" : "default"};
-        font-family:inherit;
-        color:inherit;
       "
     >
       <span class="left">
@@ -2656,9 +2648,43 @@ history.innerHTML = shots.map(shot => {
 
       <span class="right">
         ${escapeHtml(trackedDistanceLabel(shot.distance_metres))}
-        ${canEdit ? '<span class="mini" style="display:block;">Edit shot ›</span>' : ""}
+
+        <span
+          style="
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            margin-top:8px;
+          "
+        >
+          ${canEdit ? `
+            <button
+              type="button"
+              class="btn"
+              data-classify-shot-id="${shotId}"
+            >
+              Edit Shot
+            </button>
+          ` : ""}
+
+          ${
+            Number(shot.round_id) > 0 &&
+            Number.isInteger(Number(shot.hole_number)) &&
+            Number(shot.hole_number) >= 1 &&
+            Number(shot.hole_number) <= 18
+              ? `
+                <a
+                  class="btn"
+                  href="/my-rounds.html?roundId=${encodeURIComponent(shot.round_id)}&hole=${encodeURIComponent(shot.hole_number)}&shotId=${encodeURIComponent(shotId)}"
+                >
+                  View on Hole Map
+                </a>
+              `
+              : ""
+          }
+        </span>
       </span>
-    </button>
+    </div>
   `;
 }).join("");
 
@@ -2677,7 +2703,6 @@ history.querySelectorAll("[data-classify-shot-id]").forEach(button => {
 });
 
 }
-
 async function loadTrackedClubStats() {
   const body = document.getElementById("trackedClubsBody");
 
