@@ -19,6 +19,7 @@ router.use(express.json());
 // -------------------------------------------------
 // TeeRadar shot tracking table
 // -------------------------------------------------
+
 async function ensureRoundShotsTable() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS round_shots (
@@ -31,6 +32,8 @@ async function ensureRoundShotsTable() {
       latitude DOUBLE PRECISION NOT NULL,
       longitude DOUBLE PRECISION NOT NULL,
       club VARCHAR(60),
+      shot_type TEXT NOT NULL DEFAULT 'full',
+      include_in_average BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT round_shots_player_valid
         CHECK (player_number BETWEEN 1 AND 4),
@@ -46,6 +49,14 @@ async function ensureRoundShotsTable() {
       ON round_shots (
         round_id, user_id, hole_number, created_at, id
       );
+
+    ALTER TABLE round_shots
+      ADD COLUMN IF NOT EXISTS shot_type TEXT
+      NOT NULL DEFAULT 'full';
+
+    ALTER TABLE round_shots
+      ADD COLUMN IF NOT EXISTS include_in_average BOOLEAN
+      NOT NULL DEFAULT TRUE;
   `);
 }
 
@@ -2997,15 +3008,18 @@ router.get("/stats/club-shots", requireAuth, async (req, res) => {
     await ensureRoundShotsTable();
     await ensureRoundShotGreensTable();
 
+
     const result = await db.query(`
       SELECT
-        s.id,
-        s.round_id,
-        s.hole_number,
-        s.club,
-        s.latitude,
-        s.longitude,
-        s.created_at,
+  s.id,
+  s.round_id,
+  s.hole_number,
+  s.club,
+  s.latitude,
+  s.longitude,
+  s.created_at,
+  s.shot_type,
+  s.include_in_average,
         LEAD(s.latitude) OVER (
           PARTITION BY s.round_id, s.user_id, s.hole_number
           ORDER BY s.created_at, s.id
@@ -3056,17 +3070,64 @@ router.get("/stats/club-shots", requireAuth, async (req, res) => {
 
       if (!clubs.has(club)) {
         clubs.set(club, {
-          club,
-          times_used: 0,
-          measured_shots: 0,
-          total_distance: 0,
-          longest_shot: 0,
-          history: []
-        });
+  club,
+  times_used: 0,
+
+  // Shot classifications
+  full_shots: 0,
+  chip_pitch_shots: 0,
+  punch_recovery_shots: 0,
+  gps_error_shots: 0,
+  other_shots: 0,
+  excluded_shots: 0,
+
+  // Distance statistics
+  measured_shots: 0,
+  total_distance: 0,
+  longest_shot: 0,
+
+  history: []
+});
       }
 
       const stats = clubs.get(club);
-      stats.times_used++;
+stats.times_used++;
+
+// -------------------------------------------------
+// COUNT SHOTS BY CLASSIFICATION
+// -------------------------------------------------
+const shotType = String(shot.shot_type || "full")
+  .trim()
+  .toLowerCase();
+
+const includeInAverage = shot.include_in_average === true;
+
+switch (shotType) {
+  case "chip_pitch":
+    stats.chip_pitch_shots++;
+    break;
+
+  case "punch_recovery":
+    stats.punch_recovery_shots++;
+    break;
+
+  case "gps_error":
+    stats.gps_error_shots++;
+    break;
+
+  case "other":
+    stats.other_shots++;
+    break;
+
+  case "full":
+  default:
+    stats.full_shots++;
+    break;
+}
+
+if (!includeInAverage) {
+  stats.excluded_shots++;
+}
 
       const nextLat = shot.next_latitude ?? shot.green_latitude;
       const nextLon = shot.next_longitude ?? shot.green_longitude;
@@ -3082,49 +3143,81 @@ router.get("/stats/club-shots", requireAuth, async (req, res) => {
         );
       }
 
-      // Ignore missing, zero and implausible GPS distances.
-      if (
-        distance != null &&
-        Number.isFinite(distance) &&
-        distance > 0 &&
-        distance <= 500
-      ) {
-        stats.measured_shots++;
-        stats.total_distance += distance;
-        stats.longest_shot = Math.max(
-          stats.longest_shot,
-          distance
-        );
+      // -------------------------------------------------
+// VALIDATE GPS DISTANCE
+// -------------------------------------------------
+const validDistance =
+  distance != null &&
+  Number.isFinite(distance) &&
+  distance > 0 &&
+  distance <= 500;
 
-        longestShot = Math.max(longestShot, distance);
-      } else {
-        distance = null;
-      }
+if (!validDistance) {
+  distance = null;
+}
 
-      stats.history.push({
-        shot_id: shot.id,
-        round_id: shot.round_id,
-        hole_number: shot.hole_number,
-        date: shot.created_at,
-        distance_metres:
-          distance == null ? null : Math.round(distance)
-      });
+// -------------------------------------------------
+// ONLY INCLUDED SHOTS AFFECT DISTANCE STATISTICS
+// -------------------------------------------------
+if (validDistance && includeInAverage) {
+  stats.measured_shots++;
+  stats.total_distance += distance;
+
+  stats.longest_shot = Math.max(
+    stats.longest_shot,
+    distance
+  );
+
+  longestShot = Math.max(
+    longestShot,
+    distance
+  );
+}
+
+     stats.history.push({
+  shot_id: shot.id,
+  round_id: shot.round_id,
+  hole_number: shot.hole_number,
+  date: shot.created_at,
+
+  // Shot classification
+  shot_type: shotType,
+  include_in_average: includeInAverage,
+
+  // GPS distance is preserved even when excluded
+  distance_metres:
+    distance == null ? null : Math.round(distance)
+});
     }
 
-    const clubStats = [...clubs.values()].map(stats => ({
-      club: stats.club,
-      times_used: stats.times_used,
-      measured_shots: stats.measured_shots,
-      average_distance_metres: stats.measured_shots
-        ? Math.round(
-            stats.total_distance / stats.measured_shots
-          )
-        : null,
-      longest_shot_metres: stats.measured_shots
-        ? Math.round(stats.longest_shot)
-        : null,
-      history: stats.history.reverse()
-    }));
+   const clubStats = [...clubs.values()].map(stats => ({
+  club: stats.club,
+  times_used: stats.times_used,
+
+  // Shot classification counts
+  full_shots: stats.full_shots,
+  chip_pitch_shots: stats.chip_pitch_shots,
+  punch_recovery_shots: stats.punch_recovery_shots,
+  gps_error_shots: stats.gps_error_shots,
+  other_shots: stats.other_shots,
+  excluded_shots: stats.excluded_shots,
+
+  // Distance statistics — included shots only
+  measured_shots: stats.measured_shots,
+
+  average_distance_metres: stats.measured_shots
+    ? Math.round(
+        stats.total_distance / stats.measured_shots
+      )
+    : null,
+
+  longest_shot_metres: stats.measured_shots
+    ? Math.round(stats.longest_shot)
+    : null,
+
+  // Preserve all shot history
+  history: stats.history.reverse()
+}));
 
     clubStats.sort((a, b) =>
       b.times_used - a.times_used ||
@@ -3143,6 +3236,114 @@ router.get("/stats/club-shots", requireAuth, async (req, res) => {
 
   } catch (err) {
     console.error("Club stats error:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error"
+    });
+  }
+});
+
+// -------------------------------------------------
+// MY STATS — UPDATE TRACKED SHOT CLASSIFICATION
+// -------------------------------------------------
+router.patch("/shots/:shotId/classification", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const shotId = Number(req.params.shotId);
+
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised"
+      });
+    }
+
+    if (!Number.isSafeInteger(shotId) || shotId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_shot_id"
+      });
+    }
+
+    const allowedTypes = [
+      "full",
+      "chip_pitch",
+      "punch_recovery",
+      "gps_error",
+      "other"
+    ];
+
+    const shotType = req.body?.shot_type;
+
+    if (
+      typeof shotType !== "string" ||
+      !allowedTypes.includes(shotType)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_shot_type"
+      });
+    }
+
+    // Default inclusion depends on the classification.
+    // The player can explicitly override this.
+    const defaultInclude = shotType === "full";
+
+    const requestedInclude = req.body?.include_in_average;
+
+    if (
+      requestedInclude !== undefined &&
+      typeof requestedInclude !== "boolean"
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_include_in_average"
+      });
+    }
+
+    const includeInAverage =
+      requestedInclude === undefined
+        ? defaultInclude
+        : requestedInclude;
+
+    await ensureRoundShotsTable();
+
+    const result = await db.query(`
+      UPDATE round_shots
+      SET
+        shot_type = $1,
+        include_in_average = $2
+      WHERE id = $3
+        AND user_id = $4
+      RETURNING
+        id,
+        round_id,
+        hole_number,
+        club,
+        shot_type,
+        include_in_average
+    `, [
+      shotType,
+      includeInAverage,
+      shotId,
+      userId
+    ]);
+
+    if (!result.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "shot_not_found"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      shot: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error("Shot classification update error:", err);
 
     return res.status(500).json({
       ok: false,
