@@ -3608,6 +3608,62 @@ if (appAnalyticsCard) {
 
   let authMode = "login";
 
+// ============================================================
+// TEERADAR - NATIVE FACE ID / TOUCH ID
+// ============================================================
+
+const TEE_RADAR_AUTH_INTERVAL = 24 * 60 * 60 * 1000;
+
+async function testTeeRadarBiometrics() {
+  try {
+    const capacitor = window.Capacitor;
+
+    if (!capacitor?.isNativePlatform?.()) {
+      console.log("TeeRadar biometrics: Native app only.");
+      return;
+    }
+
+    const biometricPlugin =
+      capacitor.Plugins?.TeeRadarBiometric ||
+      capacitor.registerPlugin?.("TeeRadarBiometric");
+
+    if (!biometricPlugin) {
+      console.error("TeeRadar biometric plugin not found.");
+      return;
+    }
+
+    const availability =
+      await biometricPlugin.checkAvailability();
+
+    console.log(
+      "TeeRadar biometric availability:",
+      availability
+    );
+
+    const result =
+      await biometricPlugin.authenticate();
+
+    console.log(
+      "TeeRadar biometric authentication:",
+      result
+    );
+
+    return result?.authenticated === true;
+
+  } catch (error) {
+    console.error(
+      "TeeRadar biometric authentication failed:",
+      error
+    );
+
+    return false;
+  }
+}
+
+// Temporary testing function.
+// Does not automatically request Face ID.
+window.testTeeRadarBiometrics = testTeeRadarBiometrics;
+
   const authModal = document.getElementById("authModal");
   const authTitle = document.getElementById("authTitle");
   const authSubtitle = document.getElementById("authSubtitle");
@@ -4002,6 +4058,12 @@ const homeCourse =
   localStorage.setItem(
     "teeradar_jwt",
     data.token
+  );
+
+  // Record when the user last successfully authenticated.
+  localStorage.setItem(
+    "teeradar_last_auth",
+    String(Date.now())
   );
 }
 
