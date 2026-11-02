@@ -17402,14 +17402,15 @@ if (roundModeExitBtn) {
    * Opening from My Stats:
    * Preserve the requested hole instead.
    */
-  shouldAutoOpenCurrentHole =
+    shouldAutoOpenCurrentHole =
     !hasRequestedHole;
 
   await renderScorecard(
     round
   );
+}
 
-    async function createRound(){
+async function createRound(){
   const course = String(courseEl.value || "").trim();
   const state = String(stateEl.value || "WA").trim().toUpperCase();
   const holes = Number(holesEl.value || 18);
