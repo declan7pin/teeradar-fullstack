@@ -1127,12 +1127,113 @@ body.stats-loading #statsContent{
   </div>
 </div>
 
+
 <!-- RECENT SHOT HISTORY -->
 <div class="sectionTitle">Recent Shot Distances</div>
+
+<div class="mini" style="margin:8px 0 12px;">
+  Select a recorded shot to review its classification
+  and whether it contributes to your club average.
+</div>
 
 <div id="trackedClubHistory" class="mini">
   Select a club to view its shot history.
 </div>
+
+<!-- SHOT CLASSIFICATION EDITOR -->
+<div
+  id="trackedShotClassificationEditor"
+  style="
+    display:none;
+    margin-top:18px;
+    padding:18px;
+    border:1px solid #bfecee;
+    border-radius:18px;
+    background:#f4fbfa;
+  "
+>
+  <div class="sectionTitle" style="margin-top:0;">
+    Classify Shot
+  </div>
+
+  <div
+    id="trackedShotClassificationInfo"
+    class="mini"
+    style="margin:8px 0 16px;"
+  ></div>
+
+  <label
+    for="trackedShotType"
+    style="display:block;font-weight:900;margin-bottom:8px;"
+  >
+    Shot Type
+  </label>
+
+  <select
+    id="trackedShotType"
+    style="
+      width:100%;
+      min-height:48px;
+      padding:12px;
+      border:1px solid #dbe5ea;
+      border-radius:12px;
+      background:white;
+      font-size:16px;
+      margin-bottom:16px;
+    "
+  >
+    <option value="full">Full Shot</option>
+    <option value="chip_pitch">Chip / Pitch</option>
+    <option value="punch_recovery">Punch / Recovery</option>
+    <option value="gps_error">GPS Error</option>
+    <option value="other">Other</option>
+  </select>
+
+  <label
+    style="
+      display:flex;
+      align-items:center;
+      gap:12px;
+      font-weight:850;
+      margin-bottom:18px;
+      cursor:pointer;
+    "
+  >
+    <input
+      type="checkbox"
+      id="trackedShotIncludeAverage"
+      style="width:22px;height:22px;accent-color:#00796b;"
+    />
+    Include in club average
+  </label>
+
+  <div class="actions" style="justify-content:flex-start;">
+    <button
+      type="button"
+      class="btn primary"
+      id="trackedShotSaveClassification"
+    >
+      Save Classification
+    </button>
+
+    <button
+      type="button"
+      class="btn"
+      id="trackedShotCancelClassification"
+    >
+      Cancel
+    </button>
+  </div>
+
+  <div
+    id="trackedShotClassificationStatus"
+    class="mini"
+    role="status"
+    aria-live="polite"
+    style="margin-top:12px;"
+  ></div>
+</div>
+
 
 
 
@@ -2085,14 +2186,15 @@ function renderTrackedClubDistanceChart(club) {
   if (!container) return;
 
   const shots = (Array.isArray(club.history) ? club.history : [])
-    .filter(shot =>
-      shot.distance_metres !== null &&
-      shot.distance_metres !== undefined &&
-      shot.distance_metres !== "" &&
-      Number.isFinite(Number(shot.distance_metres)) &&
-      Number(shot.distance_metres) > 0
-    )
-    .reverse();
+  .filter(shot =>
+    shot.include_in_average !== false &&
+    shot.distance_metres !== null &&
+    shot.distance_metres !== undefined &&
+    shot.distance_metres !== "" &&
+    Number.isFinite(Number(shot.distance_metres)) &&
+    Number(shot.distance_metres) > 0
+  )
+  .reverse();
 
   if (!shots.length) {
     container.textContent = "No measured shots available for this club.";
@@ -2210,15 +2312,18 @@ function renderTrackedClubConsistency(club) {
 
   if (!scoreEl || !ratingEl || !spreadEl || !barEl) return;
 
-  const distances = (Array.isArray(club.history) ? club.history : [])
-    .filter(shot =>
-      shot.distance_metres !== null &&
-      shot.distance_metres !== undefined &&
-      shot.distance_metres !== "" &&
-      Number.isFinite(Number(shot.distance_metres)) &&
-      Number(shot.distance_metres) > 0
-    )
-    .map(shot => Number(shot.distance_metres));
+  
+const distances = (Array.isArray(club.history) ? club.history : [])
+  .filter(shot =>
+    shot.include_in_average !== false &&
+    shot.distance_metres !== null &&
+    shot.distance_metres !== undefined &&
+    shot.distance_metres !== "" &&
+    Number.isFinite(Number(shot.distance_metres)) &&
+    Number(shot.distance_metres) > 0
+  )
+  .map(shot => Number(shot.distance_metres));
+
 
   if (distances.length < 5) {
     scoreEl.textContent = "—";
@@ -2276,6 +2381,185 @@ function renderTrackedClubConsistency(club) {
 }
 
 
+function openTrackedShotClassification(shot) {
+  const editor = document.getElementById(
+    "trackedShotClassificationEditor"
+  );
+
+  const info = document.getElementById(
+    "trackedShotClassificationInfo"
+  );
+
+  const typeSelect = document.getElementById(
+    "trackedShotType"
+  );
+
+  const includeCheckbox = document.getElementById(
+    "trackedShotIncludeAverage"
+  );
+
+  const status = document.getElementById(
+    "trackedShotClassificationStatus"
+  );
+
+  if (!editor || !info || !typeSelect || !includeCheckbox) {
+    return;
+  }
+
+  const shotId = Number(shot?.id);
+
+  if (!Number.isSafeInteger(shotId) || shotId <= 0) {
+    return;
+  }
+
+  // Remember which shot is being edited.
+  editor.dataset.shotId = String(shotId);
+
+  const date = parseDateMaybe(shot.date);
+  const dateText = date ? dateLabel(date) : "Unknown date";
+
+  info.textContent =
+    `${selectedTrackedClub || "Club"} • ` +
+    `${dateText} • ` +
+    `Hole ${shot.hole_number ?? "—"} • ` +
+    `${trackedDistanceLabel(shot.distance_metres)}`;
+
+  const allowedTypes = [
+    "full",
+    "chip_pitch",
+    "punch_recovery",
+    "gps_error",
+    "other"
+  ];
+
+  const savedType = String(shot.shot_type || "full");
+
+  typeSelect.value = allowedTypes.includes(savedType)
+    ? savedType
+    : "full";
+
+  includeCheckbox.checked =
+    shot.include_in_average !== false;
+
+  if (status) {
+    status.textContent = "";
+  }
+
+  editor.style.display = "block";
+
+  editor.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest"
+  });
+}
+
+  
+function setupTrackedShotTypeDefaults() {
+  const typeSelect = document.getElementById("trackedShotType");
+  const includeCheckbox = document.getElementById(
+    "trackedShotIncludeAverage"
+  );
+
+  if (!typeSelect || !includeCheckbox) return;
+
+  typeSelect.addEventListener("change", () => {
+    // Full shots are included by default.
+    // All other shot types are excluded by default.
+    includeCheckbox.checked = typeSelect.value === "full";
+  });
+}
+
+setupTrackedShotTypeDefaults();
+
+  
+async function saveTrackedShotClassification() {
+  const editor = document.getElementById(
+    "trackedShotClassificationEditor"
+  );
+
+  const typeSelect = document.getElementById("trackedShotType");
+  const includeCheckbox = document.getElementById(
+    "trackedShotIncludeAverage"
+  );
+  const saveButton = document.getElementById(
+    "trackedShotSaveClassification"
+  );
+  const status = document.getElementById(
+    "trackedShotClassificationStatus"
+  );
+
+  const shotId = Number(editor?.dataset.shotId);
+
+  if (!Number.isSafeInteger(shotId) || shotId <= 0) {
+    if (status) status.textContent = "Please select a valid shot.";
+    return;
+  }
+
+  if (saveButton.disabled) return;
+
+  const shotType = typeSelect.value;
+  const includeInAverage = includeCheckbox.checked;
+
+  saveButton.disabled = true;
+  saveButton.textContent = "Saving...";
+
+  if (status) {
+    status.textContent = "Saving classification...";
+  }
+
+  try {
+    const result = await api(
+      `/api/rounds/shots/${shotId}/classification`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          shot_type: shotType,
+          include_in_average: includeInAverage
+        })
+      }
+    );
+
+    if (!result?.ok) {
+      throw new Error(
+        result?.error || "Unable to save classification"
+      );
+    }
+
+    // Close the editor after a successful save.
+    editor.style.display = "none";
+    delete editor.dataset.shotId;
+
+    // Refresh club averages, graph, consistency and history.
+    await loadTrackedClubStats();
+
+  } catch (error) {
+    console.error("Shot classification save failed:", error);
+
+    if (status) {
+      status.textContent =
+        `Unable to save: ${error.message || "Unknown error"}`;
+    }
+
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = "Save Classification";
+  }
+}
+
+document.getElementById("trackedShotSaveClassification")
+  .addEventListener("click", saveTrackedShotClassification);
+
+document.getElementById("trackedShotCancelClassification")
+  .addEventListener("click", () => {
+    const editor = document.getElementById(
+      "trackedShotClassificationEditor"
+    );
+
+    editor.style.display = "none";
+    delete editor.dataset.shotId;
+  });
+
+
 
 function showTrackedClubDetails(clubName) {
   const club = trackedClubStats.find(c => c.club === clubName);
@@ -2316,26 +2600,82 @@ function showTrackedClubDetails(clubName) {
     return;
   }
 
-  history.innerHTML = shots.map(shot => {
-    const date = parseDateMaybe(shot.date);
-    const dateText = date ? dateLabel(date) : "Unknown date";
+  
+history.innerHTML = shots.map(shot => {
+  const date = parseDateMaybe(shot.date);
+  const dateText = date ? dateLabel(date) : "Unknown date";
 
-    return `
-      <div class="row">
-        <div class="left">
-          <div style="font-weight:900">
-            ${escapeHtml(dateText)}
-          </div>
-          <div class="mini">
-            Hole ${escapeHtml(shot.hole_number ?? "—")}
-          </div>
-        </div>
-        <div class="right">
-          ${escapeHtml(trackedDistanceLabel(shot.distance_metres))}
-        </div>
-      </div>
-    `;
-  }).join("");
+  const shotTypeLabels = {
+    full: "Full Shot",
+    chip_pitch: "Chip / Pitch",
+    punch_recovery: "Punch / Recovery",
+    gps_error: "GPS Error",
+    other: "Other"
+  };
+
+  const shotType = String(shot.shot_type || "full");
+  const typeLabel = shotTypeLabels[shotType] || "Full Shot";
+  const included = shot.include_in_average !== false;
+
+  const shotId = Number(shot.id);
+  const canEdit = Number.isSafeInteger(shotId) && shotId > 0;
+
+  return `
+    <button
+      type="button"
+      class="row"
+      data-classify-shot-id="${canEdit ? shotId : ""}"
+      ${canEdit ? "" : "disabled"}
+      style="
+        width:100%;
+        background:transparent;
+        border-left:0;
+        border-right:0;
+        border-bottom:0;
+        border-radius:0;
+        text-align:left;
+        cursor:${canEdit ? "pointer" : "default"};
+        font-family:inherit;
+        color:inherit;
+      "
+    >
+      <span class="left">
+        <span style="font-weight:900;">
+          ${escapeHtml(dateText)}
+        </span>
+
+        <span class="mini">
+          Hole ${escapeHtml(shot.hole_number ?? "—")}
+        </span>
+
+        <span class="mini">
+          ${escapeHtml(typeLabel)}
+          ${included ? "• Included in average" : "• Excluded from average"}
+        </span>
+      </span>
+
+      <span class="right">
+        ${escapeHtml(trackedDistanceLabel(shot.distance_metres))}
+        ${canEdit ? '<span class="mini" style="display:block;">Edit shot ›</span>' : ""}
+      </span>
+    </button>
+  `;
+}).join("");
+
+history.querySelectorAll("[data-classify-shot-id]").forEach(button => {
+  button.addEventListener("click", () => {
+    const shotId = Number(button.dataset.classifyShotId);
+
+    const selectedShot = shots.find(
+      shot => Number(shot.id) === shotId
+    );
+
+    if (!selectedShot) return;
+
+    openTrackedShotClassification(selectedShot);
+  });
+});
+
 }
 
 async function loadTrackedClubStats() {
