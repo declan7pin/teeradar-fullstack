@@ -4065,6 +4065,33 @@ const homeCourse =
     "teeradar_last_auth",
     String(Date.now())
   );
+
+  // ============================================================
+  // TEERADAR - RECORD SUCCESSFUL LOGIN IN IOS
+  // ============================================================
+
+  try {
+    const capacitor = window.Capacitor;
+
+    if (capacitor?.isNativePlatform?.()) {
+      const biometricPlugin =
+        capacitor.Plugins?.TeeRadarBiometric ||
+        capacitor.registerPlugin?.("TeeRadarBiometric");
+
+      if (biometricPlugin) {
+        await biometricPlugin.recordLogin();
+
+        console.log(
+          "TeeRadar: Native authentication timer started."
+        );
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "TeeRadar: Could not record native login.",
+      error
+    );
+  }
 }
 
 if (data.user && data.user.email) {
