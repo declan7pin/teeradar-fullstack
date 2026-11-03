@@ -243,12 +243,11 @@ async function ensureAnalyticsDailySummary() {
 }
 
 
+
 export async function backfillAnalyticsDailySummaryOnce() {
   const todayUtc = new Date().toISOString().slice(0, 10);
 
-  if (analyticsSummaryReadyDay === todayUtc) {
-    return;
-  }
+  if (analyticsSummaryReadyDay === todayUtc) return;
 
   if (analyticsSummaryRefreshPromise) {
     return analyticsSummaryRefreshPromise;
@@ -257,33 +256,34 @@ export async function backfillAnalyticsDailySummaryOnce() {
   analyticsSummaryRefreshPromise = (async () => {
     await ensureAnalyticsDailySummary();
 
-    // Refresh completed days individually, starting from
-    // the last successfully processed date.
-    // Revisit the previous day to catch late-arriving events.
-    const lastResult = await db.query(`
-      SELECT MAX(day) AS last_day
-      FROM analytics_daily_summary
-      WHERE type = 'home_view'
+    // Track successful daily refreshes independently of event types.
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS analytics_summary_progress (
+        day date PRIMARY KEY,
+        completed_at timestamptz NOT NULL DEFAULT NOW()
+      )
     `);
 
-    const lastDay = lastResult.rows[0]?.last_day;
+    const result = await db.query(`
+      SELECT TO_CHAR(MAX(day), 'YYYY-MM-DD') AS last_day
+      FROM analytics_summary_progress
+    `);
 
-    let cursor = lastDay
-      ? new Date(lastDay)
-      : new Date("2026-10-01T00:00:00Z");
+    const lastDay = result.rows[0]?.last_day;
+    const startDay = lastDay || "2026-10-04";
 
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
+    const cursor = new Date(startDay + "T00:00:00Z");
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
 
     const today = new Date(todayUtc + "T00:00:00Z");
 
-    // Process a limited number of days per invocation
-    // to avoid overwhelming the database.
     let processed = 0;
     const maxDaysPerRun = 3;
 
     while (cursor < today && processed < maxDaysPerRun) {
       const day = cursor.toISOString().slice(0, 10);
 
+      // Aggregate only one completed day at a time.
       await db.query(`
         INSERT INTO analytics_daily_summary
           (day, provider, type, course_name, n, updated_at)
@@ -316,13 +316,20 @@ export async function backfillAnalyticsDailySummaryOnce() {
           updated_at = NOW()
       `, [day]);
 
+      // Only record progress after the day's summary succeeds.
+      await db.query(`
+        INSERT INTO analytics_summary_progress (day, completed_at)
+        VALUES ($1::date, NOW())
+        ON CONFLICT (day)
+        DO UPDATE SET completed_at = NOW()
+      `, [day]);
+
       console.log("✅ Analytics summary refreshed:", day);
 
       cursor.setUTCDate(cursor.getUTCDate() + 1);
       processed++;
     }
 
-    // Mark ready only if all completed days were processed.
     if (cursor >= today) {
       analyticsSummaryReadyDay = todayUtc;
     }
@@ -334,6 +341,7 @@ export async function backfillAnalyticsDailySummaryOnce() {
     analyticsSummaryRefreshPromise = null;
   }
 }
+
 
 
 /**
