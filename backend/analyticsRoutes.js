@@ -345,8 +345,13 @@ if (lastDay) {
     }
 
     if (cursor >= today) {
-      analyticsSummaryReadyDay = todayUtc;
-    }
+  analyticsSummaryReadyDay = todayUtc;
+} else {
+  console.log(
+    "📊 Analytics backfill has more days remaining. " +
+    "Next batch will continue automatically."
+  );
+}
   })();
 
   try {
