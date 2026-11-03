@@ -270,12 +270,26 @@ export async function backfillAnalyticsDailySummaryOnce() {
     `);
 
     const lastDay = result.rows[0]?.last_day;
-    const startDay = lastDay || "2026-10-04";
+const today = new Date(todayUtc + "T00:00:00Z");
 
-    const cursor = new Date(startDay + "T00:00:00Z");
+let cursor;
+
+if (lastDay) {
+  cursor = new Date(lastDay + "T00:00:00Z");
+
+  // Revisit yesterday when already caught up.
+  // Otherwise continue from the next unprocessed day.
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+  if (cursor >= yesterday) {
+    cursor = yesterday;
+  } else {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
-
-    const today = new Date(todayUtc + "T00:00:00Z");
+  }
+} else {
+  cursor = new Date("2026-10-05T00:00:00Z");
+}
 
     let processed = 0;
     const maxDaysPerRun = 3;
