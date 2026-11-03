@@ -242,15 +242,14 @@ async function ensureAnalyticsDailySummary() {
   `);
 }
 
+
 export async function backfillAnalyticsDailySummaryOnce() {
   const todayUtc = new Date().toISOString().slice(0, 10);
 
-  // Historical data has already been refreshed today.
   if (analyticsSummaryReadyDay === todayUtc) {
     return;
   }
 
-  // Share the same refresh between simultaneous requests.
   if (analyticsSummaryRefreshPromise) {
     return analyticsSummaryRefreshPromise;
   }
@@ -258,64 +257,84 @@ export async function backfillAnalyticsDailySummaryOnce() {
   analyticsSummaryRefreshPromise = (async () => {
     await ensureAnalyticsDailySummary();
 
-  // Backfill all completed days only. Today stays live.
-  await db.query(`
-    INSERT INTO analytics_daily_summary (day, provider, type, course_name, n, updated_at)
-    SELECT
-      occurred_at::date AS day,
-      LOWER(
-        regexp_replace(
-          COALESCE(
-            meta->>'provider',
-            meta->>'courseProvider',
-            meta->>'course_provider',
-            ''
-          ),
-          '\\s+',
-          '',
-          'g'
-        )
-      ) AS provider,
-      type,
-      COALESCE(course_name, '') AS course_name,
-      COUNT(*)::int AS n,
-      NOW()
-    FROM analytics
-    WHERE occurred_at < CURRENT_DATE
-    GROUP BY
-      occurred_at::date,
-      LOWER(
-        regexp_replace(
-          COALESCE(
-            meta->>'provider',
-            meta->>'courseProvider',
-            meta->>'course_provider',
-            ''
-          ),
-          '\\s+',
-          '',
-          'g'
-        )
-      ),
-      type,
-      COALESCE(course_name, '')
-        ON CONFLICT (day, provider, type, course_name)
-    DO UPDATE SET
-      n = EXCLUDED.n,
-      updated_at = NOW();
-  `);
+    // Refresh completed days individually, starting from
+    // the last successfully processed date.
+    // Revisit the previous day to catch late-arriving events.
+    const lastResult = await db.query(`
+      SELECT MAX(day) AS last_day
+      FROM analytics_daily_summary
+      WHERE type = 'home_view'
+    `);
 
-    // Only mark the day as ready after the database update succeeds.
-    analyticsSummaryReadyDay = todayUtc;
+    const lastDay = lastResult.rows[0]?.last_day;
+
+    let cursor = lastDay
+      ? new Date(lastDay)
+      : new Date("2026-10-01T00:00:00Z");
+
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+
+    const today = new Date(todayUtc + "T00:00:00Z");
+
+    // Process a limited number of days per invocation
+    // to avoid overwhelming the database.
+    let processed = 0;
+    const maxDaysPerRun = 3;
+
+    while (cursor < today && processed < maxDaysPerRun) {
+      const day = cursor.toISOString().slice(0, 10);
+
+      await db.query(`
+        INSERT INTO analytics_daily_summary
+          (day, provider, type, course_name, n, updated_at)
+        SELECT
+          occurred_at::date,
+          LOWER(
+            regexp_replace(
+              COALESCE(
+                meta->>'provider',
+                meta->>'courseProvider',
+                meta->>'course_provider',
+                ''
+              ),
+              '\\s+',
+              '',
+              'g'
+            )
+          ),
+          type,
+          COALESCE(course_name, ''),
+          COUNT(*)::int,
+          NOW()
+        FROM analytics
+        WHERE occurred_at >= $1::date
+          AND occurred_at < ($1::date + INTERVAL '1 day')
+        GROUP BY 1, 2, 3, 4
+        ON CONFLICT (day, provider, type, course_name)
+        DO UPDATE SET
+          n = EXCLUDED.n,
+          updated_at = NOW()
+      `, [day]);
+
+      console.log("✅ Analytics summary refreshed:", day);
+
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      processed++;
+    }
+
+    // Mark ready only if all completed days were processed.
+    if (cursor >= today) {
+      analyticsSummaryReadyDay = todayUtc;
+    }
   })();
 
   try {
     await analyticsSummaryRefreshPromise;
   } finally {
-    // A failed refresh can be retried on the next request.
     analyticsSummaryRefreshPromise = null;
   }
 }
+
 
 /**
  * ✅ Build summary directly from Postgres analytics table
