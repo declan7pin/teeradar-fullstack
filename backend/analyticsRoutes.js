@@ -203,7 +203,10 @@ router.post("/event", async (req, res) => {
   }
 });
 
-let analyticsSummaryReady = false;
+// Track the last successfully refreshed UTC day.
+// Allow only one refresh to run at a time.
+let analyticsSummaryReadyDay = null;
+let analyticsSummaryRefreshPromise = null;
 
 async function ensureAnalyticsDailySummary() {
   await db.query(`
@@ -240,10 +243,20 @@ async function ensureAnalyticsDailySummary() {
 }
 
 export async function backfillAnalyticsDailySummaryOnce() {
-  if (analyticsSummaryReady) return;
-  analyticsSummaryReady = true;
+  const todayUtc = new Date().toISOString().slice(0, 10);
 
-  await ensureAnalyticsDailySummary();
+  // Historical data has already been refreshed today.
+  if (analyticsSummaryReadyDay === todayUtc) {
+    return;
+  }
+
+  // Share the same refresh between simultaneous requests.
+  if (analyticsSummaryRefreshPromise) {
+    return analyticsSummaryRefreshPromise;
+  }
+
+  analyticsSummaryRefreshPromise = (async () => {
+    await ensureAnalyticsDailySummary();
 
   // Backfill all completed days only. Today stays live.
   await db.query(`
@@ -286,11 +299,22 @@ export async function backfillAnalyticsDailySummaryOnce() {
       ),
       type,
       COALESCE(course_name, '')
-    ON CONFLICT (day, provider, type, course_name)
+        ON CONFLICT (day, provider, type, course_name)
     DO UPDATE SET
       n = EXCLUDED.n,
       updated_at = NOW();
   `);
+
+    // Only mark the day as ready after the database update succeeds.
+    analyticsSummaryReadyDay = todayUtc;
+  })();
+
+  try {
+    await analyticsSummaryRefreshPromise;
+  } finally {
+    // A failed refresh can be retried on the next request.
+    analyticsSummaryRefreshPromise = null;
+  }
 }
 
 /**
