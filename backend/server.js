@@ -2574,9 +2574,33 @@ const shouldCheck =
 // -------------------------------------------------
 backfillExistingSubscriberStatuses();
 
-backfillAnalyticsDailySummaryOnce()
-  .then(() => console.log("✅ analytics daily summary ready"))
-  .catch((err) => console.error("❌ analytics daily summary failed:", err));
+// ============================================================
+// ANALYTICS DAILY SUMMARY REFRESH
+// ============================================================
+
+async function refreshAnalyticsDailySummary() {
+  try {
+    await backfillAnalyticsDailySummaryOnce();
+    console.log("✅ Analytics daily summary refresh completed");
+  } catch (err) {
+    console.error(
+      "❌ Analytics daily summary refresh failed:",
+      err
+    );
+  }
+}
+
+// Run once when the server starts.
+refreshAnalyticsDailySummary();
+
+// Check every hour for a new completed UTC day.
+// The analytics function prevents duplicate daily processing.
+const analyticsRefreshTimer = setInterval(() => {
+  refreshAnalyticsDailySummary();
+}, 60 * 60 * 1000);
+
+// Do not keep Node running solely for this timer.
+analyticsRefreshTimer.unref();
 
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
