@@ -4500,6 +4500,113 @@ async function ensureTeeRadarHolePreview(
   }
 }
 
+    // ============================================================
+// APPLE WATCH — RECEIVE COMMANDS
+// ============================================================
+
+let teeRadarWatchListenerRegistered = false;
+
+async function registerTeeRadarWatchCommands() {
+
+  if (teeRadarWatchListenerRegistered) return;
+
+  const Watch =
+    window.Capacitor?.Plugins?.TeeRadarWatch;
+
+  if (!Watch || typeof Watch.addListener !== "function") {
+    return;
+  }
+
+  try {
+
+    await Watch.addListener(
+      "watchCommand",
+      async (command) => {
+
+        console.log(
+          "⌚ Apple Watch command received:",
+          command
+        );
+
+        const roundId = String(command?.roundId || "");
+        const hole = Number(command?.hole);
+
+        if (
+          !currentRound ||
+          String(currentRoundId) !== roundId
+        ) {
+          console.warn(
+            "⌚ Watch command ignored: round mismatch"
+          );
+          return;
+        }
+
+        const totalHoles =
+          Number(currentRound?.holes) || 18;
+
+        if (
+          !Number.isInteger(hole) ||
+          hole < 1 ||
+          hole > totalHoles
+        ) {
+          console.warn(
+            "⌚ Watch command ignored: invalid hole"
+          );
+          return;
+        }
+
+        if (command.type === "change_hole") {
+
+          premiumHoleIndex = hole - 1;
+
+          renderPremiumForHole(
+            currentRound,
+            currentPremiumPars,
+            currentPremiumDistances,
+            currentPremiumTeeName
+          );
+
+          await syncTeeRadarLiveActivity();
+
+          console.log(
+            "⌚ Hole changed to:",
+            hole
+          );
+
+        } else if (command.type === "track_shot") {
+
+          console.log(
+            "⌚ Track Shot requested:",
+            {
+              hole,
+              club: command.club
+            }
+          );
+
+          // Shot saving will be connected in the next step.
+          // No shot is recorded here yet.
+
+        }
+
+      }
+    );
+
+    teeRadarWatchListenerRegistered = true;
+
+    console.log(
+      "⌚ Apple Watch command listener registered"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "⌚ Apple Watch listener failed:",
+      error
+    );
+
+  }
+}
+
 
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
@@ -19024,6 +19131,11 @@ if (holePickerBack){
 }
 
     (async function init(){
+        // ============================================================
+  // APPLE WATCH — ACTIVATE COMMAND LISTENER
+  // ============================================================
+
+  await registerTeeRadarWatchCommands();
 
   /*
    * PLAY / MY ROUNDS IS ACCOUNT-ONLY.
