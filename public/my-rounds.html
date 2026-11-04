@@ -4595,8 +4595,11 @@ if (command.type === "change_hole") {
     currentPremiumTeeName
   );
 
+  // Send the confirmed hole back to Apple Watch.
+  await syncTeeRadarLiveActivity();
+
   console.log(
-    "⌚ Hole changed to:",
+    "⌚ Hole changed and synced to Apple Watch:",
     hole
   );
 
