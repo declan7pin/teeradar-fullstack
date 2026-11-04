@@ -4667,7 +4667,71 @@ if (command.type === "change_hole") {
   });
 
 
-       } else if (command.type === "track_shot") {
+       } else if (command.type === "save_putts") {
+
+  const putts = Number(command.putts);
+
+  if (
+    watchPlayerNumber < 1 ||
+    !Number.isInteger(putts) ||
+    putts < 0 ||
+    putts > 20
+  ) {
+    console.warn(
+      "⌚ Watch putts rejected: invalid player or putts"
+    );
+    return;
+  }
+
+  // Save putts only, preserving existing strokes.
+  await savePremiumPlayerScore(
+    hole,
+    watchPlayerNumber,
+    { putts }
+  );
+
+  // Update the local scorecard.
+  setHoleValueInTable(
+    hole,
+    "putts",
+    watchPlayerNumber,
+    putts
+  );
+
+  // Update the round's in-memory data.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone scorecard.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  // Synchronise the latest round data with Apple Watch.
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Watch putts saved:", {
+    hole,
+    player: watchPlayerNumber,
+    putts
+  });
+
+} else if (command.type === "track_shot") {
 
   console.log("⌚ Track Shot requested:", {
     hole,
