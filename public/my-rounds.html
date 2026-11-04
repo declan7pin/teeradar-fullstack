@@ -4541,6 +4541,34 @@ async function registerTeeRadarWatchCommands() {
           return;
         }
 
+        // Identify the authenticated golfer's scorecard slot.
+const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+const loggedInUserId = Number(
+  tokenPayload.id ??
+  tokenPayload.userId ??
+  tokenPayload.user_id ??
+  tokenPayload.sub
+);
+
+let playerUserIds = currentRound?.player_user_ids || [];
+
+if (typeof playerUserIds === "string") {
+  try {
+    playerUserIds = JSON.parse(playerUserIds);
+  } catch (_) {
+    playerUserIds = [];
+  }
+}
+
+const watchPlayerIndex = Array.isArray(playerUserIds)
+  ? playerUserIds.findIndex(
+      id => Number(id) === loggedInUserId
+    )
+  : -1;
+
+const watchPlayerNumber = watchPlayerIndex + 1;
+
         const totalHoles =
           Number(currentRound?.holes) || 18;
 
@@ -4571,6 +4599,69 @@ if (command.type === "change_hole") {
     "⌚ Hole changed to:",
     hole
   );
+
+  } else if (command.type === "save_score") {
+
+  const strokes = Number(command.strokes);
+
+  if (
+    watchPlayerNumber < 1 ||
+    !Number.isInteger(strokes) ||
+    strokes < 1 ||
+    strokes > 30
+  ) {
+    console.warn(
+      "⌚ Watch score rejected: invalid player or strokes"
+    );
+    return;
+  }
+
+  // Save strokes only, preserving existing putts.
+  await savePremiumPlayerScore(
+    hole,
+    watchPlayerNumber,
+    { strokes }
+  );
+
+  // Update the local scorecard.
+  setHoleValueInTable(
+    hole,
+    "strokes",
+    watchPlayerNumber,
+    strokes
+  );
+
+  // Keep the round's in-memory data updated.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone and Watch score displays.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Watch score saved:", {
+    hole,
+    player: watchPlayerNumber,
+    strokes
+  });
 
 
        } else if (command.type === "track_shot") {
