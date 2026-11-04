@@ -4727,7 +4727,7 @@ if (command.type === "change_hole") {
   }
 }
 
-
+let teeRadarLastWatchPayloadKey = "";
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
 
@@ -4746,37 +4746,44 @@ async function syncTeeRadarLiveActivity() {
     // SEND CURRENT ROUND TO APPLE WATCH
     // =====================================================
 
-    if (Watch && typeof Watch.sendRound === "function") {
-      try {
-        await Watch.sendRound({
-          roundId: String(payload.roundId),
-          courseName: payload.courseName,
-          hole: payload.hole,
-          totalHoles: payload.totalHoles,
-          par: payload.par,
-          frontDistance: payload.frontDistance,
-          middleDistance: payload.middleDistance,
-          backDistance: payload.backDistance,
-          holeScore: payload.holeScore,
-          totalScoreToPar: payload.totalScoreToPar,
+   if (Watch && typeof Watch.sendRound === "function") {
+  const watchData = {
+    roundId: String(payload.roundId),
+    courseName: payload.courseName,
+    hole: payload.hole,
+    totalHoles: payload.totalHoles,
+    par: payload.par,
+    frontDistance: payload.frontDistance,
+    middleDistance: payload.middleDistance,
+    backDistance: payload.backDistance,
+    holeScore: payload.holeScore,
+    totalScoreToPar: payload.totalScoreToPar,
+    playerNumber: Math.max(
+  1,
+  Number(currentRound?.player_number) || 1
+)
+  };
 
-          // The watch should ultimately follow the
-          // authenticated golfer's actual player slot.
-          // For now, this is display-only.
-          playerNumber: premiumPlayerIndex + 1
-        });
+  const watchKey = JSON.stringify(watchData);
 
-        console.log(
-          "⌚ TeeRadar Apple Watch update sent",
-          payload
-        );
-      } catch (watchError) {
-        console.warn(
-          "⚠️ TeeRadar Apple Watch sync failed:",
-          watchError
-        );
-      }
+  if (watchKey !== teeRadarLastWatchPayloadKey) {
+    try {
+      await Watch.sendRound(watchData);
+
+      teeRadarLastWatchPayloadKey = watchKey;
+
+      console.log(
+        "⌚ TeeRadar Apple Watch update sent",
+        watchData
+      );
+    } catch (watchError) {
+      console.warn(
+        "⚠️ TeeRadar Apple Watch sync failed:",
+        watchError
+      );
     }
+  }
+}
 
     // =====================================================
     // EXISTING IPHONE LIVE ACTIVITY
@@ -4804,11 +4811,17 @@ async function syncTeeRadarLiveActivity() {
 
     if (previewCoordinates) {
       try {
-        await ensureTeeRadarHolePreview(
-          LiveActivity,
-          payload.holePreviewId,
-          previewCoordinates
-        );
+        console.time("⏱️ TeeRadar satellite preview");
+
+try {
+  await ensureTeeRadarHolePreview(
+    LiveActivity,
+    payload.holePreviewId,
+    previewCoordinates
+  );
+} finally {
+  console.timeEnd("⏱️ TeeRadar satellite preview");
+}
       } catch (previewError) {
         console.warn(
           "⚠️ Satellite hole preview unavailable:",
