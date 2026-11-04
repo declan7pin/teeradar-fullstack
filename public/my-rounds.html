@@ -4500,55 +4500,105 @@ async function ensureTeeRadarHolePreview(
   }
 }
 
+
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
 
   const LiveActivity = getTeeRadarLiveActivityPlugin();
 
-  if (!LiveActivity) {
-    console.warn("TeeRadar Live Activity plugin unavailable");
-    return;
-  }
+  // Apple Watch Capacitor plugin
+  const Watch =
+    window.Capacitor?.Plugins?.TeeRadarWatch;
 
   try {
     const payload = buildTeeRadarLiveActivityPayload();
 
     if (!payload) return;
 
-// Generate the current hole preview only once per app session.
-const previewCoordinates =
-  getTeeRadarHolePreviewCoordinates();
+    // =====================================================
+    // SEND CURRENT ROUND TO APPLE WATCH
+    // =====================================================
 
-console.log("🗺️ TeeRadar preview diagnostic:", {
-  hole: payload.hole,
-  previewKey: payload.holePreviewId,
-  coordinates: previewCoordinates,
-  generatorAvailable:
-    typeof LiveActivity.generateHolePreview === "function"
-});
+    if (Watch && typeof Watch.sendRound === "function") {
+      try {
+        await Watch.sendRound({
+          roundId: String(payload.roundId),
+          courseName: payload.courseName,
+          hole: payload.hole,
+          totalHoles: payload.totalHoles,
+          par: payload.par,
+          frontDistance: payload.frontDistance,
+          middleDistance: payload.middleDistance,
+          backDistance: payload.backDistance,
+          holeScore: payload.holeScore,
+          totalScoreToPar: payload.totalScoreToPar,
 
-if (previewCoordinates) {
-  try {
-    await ensureTeeRadarHolePreview(
-      LiveActivity,
-      payload.holePreviewId,
-      previewCoordinates
-    );
-  } catch (previewError) {
-    console.warn(
-      "⚠️ Satellite hole preview unavailable:",
-      previewError
-    );
-  }
-}
+          // The watch should ultimately follow the
+          // authenticated golfer's actual player slot.
+          // For now, this is display-only.
+          playerNumber: premiumPlayerIndex + 1
+        });
+
+        console.log(
+          "⌚ TeeRadar Apple Watch update sent",
+          payload
+        );
+      } catch (watchError) {
+        console.warn(
+          "⚠️ TeeRadar Apple Watch sync failed:",
+          watchError
+        );
+      }
+    }
+
+    // =====================================================
+    // EXISTING IPHONE LIVE ACTIVITY
+    // =====================================================
+
+    if (!LiveActivity) {
+      console.warn(
+        "TeeRadar Live Activity plugin unavailable"
+      );
+      return;
+    }
+
+    // Generate the current hole preview only once
+    // per app session.
+    const previewCoordinates =
+      getTeeRadarHolePreviewCoordinates();
+
+    console.log("🗺️ TeeRadar preview diagnostic:", {
+      hole: payload.hole,
+      previewKey: payload.holePreviewId,
+      coordinates: previewCoordinates,
+      generatorAvailable:
+        typeof LiveActivity.generateHolePreview === "function"
+    });
+
+    if (previewCoordinates) {
+      try {
+        await ensureTeeRadarHolePreview(
+          LiveActivity,
+          payload.holePreviewId,
+          previewCoordinates
+        );
+      } catch (previewError) {
+        console.warn(
+          "⚠️ Satellite hole preview unavailable:",
+          previewError
+        );
+      }
+    }
 
     const roundId = String(payload.roundId);
 
-    if (String(teeRadarLiveActivityRoundId || "") !== roundId) {
+    if (
+      String(teeRadarLiveActivityRoundId || "") !== roundId
+    ) {
       await LiveActivity.start({
-  ...payload,
-  holePreviewKey: payload.holePreviewId
-});
+        ...payload,
+        holePreviewKey: payload.holePreviewId
+      });
 
       teeRadarLiveActivityRoundId = roundId;
 
@@ -4561,18 +4611,18 @@ if (previewCoordinates) {
     }
 
     await LiveActivity.update({
-  hole: payload.hole,
-  totalHoles: payload.totalHoles,
-  par: payload.par,
-  frontDistance: payload.frontDistance,
-  middleDistance: payload.middleDistance,
-  backDistance: payload.backDistance,
-  holeScore: payload.holeScore,
-  totalScoreToPar: payload.totalScoreToPar,
+      hole: payload.hole,
+      totalHoles: payload.totalHoles,
+      par: payload.par,
+      frontDistance: payload.frontDistance,
+      middleDistance: payload.middleDistance,
+      backDistance: payload.backDistance,
+      holeScore: payload.holeScore,
+      totalScoreToPar: payload.totalScoreToPar,
 
-  // Current hole image identifier
-  holePreviewKey: payload.holePreviewId
-});
+      // Current hole image identifier
+      holePreviewKey: payload.holePreviewId
+    });
 
     console.log(
       "✅ TeeRadar Live Activity updated",
@@ -4586,6 +4636,7 @@ if (previewCoordinates) {
     );
   }
 }
+
 
 async function endTeeRadarLiveActivity() {
   const LiveActivity = getTeeRadarLiveActivityPlugin();
