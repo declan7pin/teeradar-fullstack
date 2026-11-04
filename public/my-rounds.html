@@ -4728,6 +4728,8 @@ if (command.type === "change_hole") {
 }
 
 let teeRadarLastWatchPayloadKey = "";
+let teeRadarLastWatchSentAt = 0;
+let teeRadarWatchSendInProgress = false;
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
 
@@ -4746,7 +4748,7 @@ async function syncTeeRadarLiveActivity() {
     // SEND CURRENT ROUND TO APPLE WATCH
     // =====================================================
 
-   if (Watch && typeof Watch.sendRound === "function") {
+  if (Watch && typeof Watch.sendRound === "function") {
   const watchData = {
     roundId: String(payload.roundId),
     courseName: payload.courseName,
@@ -4759,18 +4761,41 @@ async function syncTeeRadarLiveActivity() {
     holeScore: payload.holeScore,
     totalScoreToPar: payload.totalScoreToPar,
     playerNumber: Math.max(
-  1,
-  Number(currentRound?.player_number) || 1
-)
+      1,
+      Number(currentRound?.player_number) || 1
+    )
   };
 
-  const watchKey = JSON.stringify(watchData);
+  // Identify important changes independently of GPS distances.
+  const watchKey = JSON.stringify({
+    roundId: watchData.roundId,
+    courseName: watchData.courseName,
+    hole: watchData.hole,
+    totalHoles: watchData.totalHoles,
+    par: watchData.par,
+    holeScore: watchData.holeScore,
+    totalScoreToPar: watchData.totalScoreToPar,
+    playerNumber: watchData.playerNumber
+  });
 
-  if (watchKey !== teeRadarLastWatchPayloadKey) {
+  const now = Date.now();
+  const importantChange =
+    watchKey !== teeRadarLastWatchPayloadKey;
+
+  const distanceRefreshDue =
+    now - teeRadarLastWatchSentAt >= 10000;
+
+  if (
+    !teeRadarWatchSendInProgress &&
+    (importantChange || distanceRefreshDue)
+  ) {
+    teeRadarWatchSendInProgress = true;
+
     try {
       await Watch.sendRound(watchData);
 
       teeRadarLastWatchPayloadKey = watchKey;
+      teeRadarLastWatchSentAt = Date.now();
 
       console.log(
         "⌚ TeeRadar Apple Watch update sent",
@@ -4781,6 +4806,8 @@ async function syncTeeRadarLiveActivity() {
         "⚠️ TeeRadar Apple Watch sync failed:",
         watchError
       );
+    } finally {
+      teeRadarWatchSendInProgress = false;
     }
   }
 }
