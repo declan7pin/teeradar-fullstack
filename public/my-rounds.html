@@ -4608,7 +4608,7 @@ if (command.type === "change_hole") {
   }
 
   // Use TeeRadar's existing GPS shot-saving system.
-  await saveTrackedShot();
+  await saveTrackedShot(String(command.club ?? ""));
 
   console.log("⌚ Apple Watch shot request processed");
 
@@ -6365,8 +6365,7 @@ async function calculateTrackedHoleStrokes(
     parent.appendChild(overlay);
   });
 }
-
-async function saveTrackedShot() {
+async function saveTrackedShot(watchClub = null) {
   const button = document.getElementById(
     "trackShotBtn"
   );
@@ -6414,8 +6413,11 @@ async function saveTrackedShot() {
   // the golfer is selecting a club.
   trackShotSaving = true;
 
-  // Ask for the club before capturing GPS.
-  const club = await promptTrackShotClub();
+    // Apple Watch supplies its selected club directly.
+  // Manual iPhone tracking still asks for a club.
+  const club = watchClub !== null
+    ? String(watchClub).trim()
+    : await promptTrackShotClub();
 
   // Cancel means no shot is recorded.
   if (club === null) {
