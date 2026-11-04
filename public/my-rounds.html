@@ -4573,20 +4573,46 @@ if (command.type === "change_hole") {
   );
 
 
-        } else if (command.type === "track_shot") {
+       } else if (command.type === "track_shot") {
 
-          console.log(
-            "⌚ Track Shot requested:",
-            {
-              hole,
-              club: command.club
-            }
-          );
+  console.log("⌚ Track Shot requested:", {
+    hole,
+    club: command.club
+  });
 
-          // Shot saving will be connected in the next step.
-          // No shot is recorded here yet.
+  // Ensure the iPhone is viewing the correct hole.
+  if (premiumHoleIndex + 1 !== hole) {
+    premiumHoleIndex = hole - 1;
 
-        }
+    renderPremiumForHole(
+      currentRound,
+      currentPremiumPars,
+      currentPremiumDistances,
+      currentPremiumTeeName
+    );
+  }
+
+  // Apply the club selected on Apple Watch.
+  const clubSelect = document.getElementById("trackShotClub");
+
+  if (clubSelect && command.club) {
+    const matchingOption = Array.from(clubSelect.options)
+      .find(option =>
+        option.value.toLowerCase() ===
+        String(command.club).toLowerCase()
+      );
+
+    if (matchingOption) {
+      clubSelect.value = matchingOption.value;
+    }
+  }
+
+  // Use TeeRadar's existing GPS shot-saving system.
+  await saveTrackedShot();
+
+  console.log("⌚ Apple Watch shot request processed");
+
+}
 
       }
     );
