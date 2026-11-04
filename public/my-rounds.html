@@ -4555,23 +4555,23 @@ async function registerTeeRadarWatchCommands() {
           return;
         }
 
-        if (command.type === "change_hole") {
+        
+if (command.type === "change_hole") {
 
-          premiumHoleIndex = hole - 1;
+  premiumHoleIndex = hole - 1;
 
-          renderPremiumForHole(
-            currentRound,
-            currentPremiumPars,
-            currentPremiumDistances,
-            currentPremiumTeeName
-          );
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
 
-          await syncTeeRadarLiveActivity();
+  console.log(
+    "⌚ Hole changed to:",
+    hole
+  );
 
-          console.log(
-            "⌚ Hole changed to:",
-            hole
-          );
 
         } else if (command.type === "track_shot") {
 
