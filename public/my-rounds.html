@@ -4731,6 +4731,93 @@ if (command.type === "change_hole") {
     putts
   });
 
+  
+} else if (
+  command.type === "save_combined_score" ||
+  command.type === "save_player_score"
+) {
+
+  const playerNumber =
+    command.type === "save_player_score"
+      ? Number(command.playerNumber)
+      : watchPlayerNumber;
+
+  const strokes = Number(command.strokes);
+  const putts = Number(command.putts);
+
+  if (
+    !Number.isInteger(playerNumber) ||
+    playerNumber < 1 ||
+    playerNumber > 4 ||
+    !Number.isInteger(strokes) ||
+    strokes < 1 ||
+    strokes > 30 ||
+    !Number.isInteger(putts) ||
+    putts < 0 ||
+    putts > strokes
+  ) {
+    console.warn("⌚ Invalid combined score:", command);
+    return;
+  }
+
+  // Save strokes and putts together.
+  await savePremiumPlayerScore(
+    hole,
+    playerNumber,
+    { strokes, putts }
+  );
+
+  // Update both values on the iPhone scorecard.
+  setHoleValueInTable(
+    hole,
+    "strokes",
+    playerNumber,
+    strokes
+  );
+
+  setHoleValueInTable(
+    hole,
+    "putts",
+    playerNumber,
+    putts
+  );
+
+  // Update the round's in-memory hole data.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone scorecard.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  // Send updated round information to Apple Watch.
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Combined Watch score saved:", {
+    hole,
+    playerNumber,
+    strokes,
+    putts
+  });
+
+
+
 } else if (command.type === "track_shot") {
 
   console.log("⌚ Track Shot requested:", {
