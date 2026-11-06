@@ -4853,9 +4853,32 @@ if (command.type === "change_hole") {
   }
 
   // Use TeeRadar's existing GPS shot-saving system.
-  await saveTrackedShot(String(command.club ?? ""));
+    await saveTrackedShot(String(command.club ?? ""));
 
   console.log("⌚ Apple Watch shot request processed");
+
+} else if (command.type === "ball_on_green") {
+
+  console.log("⌚ Apple Watch Ball on Green requested:", {
+    roundId: command.roundId,
+    hole
+  });
+
+  // Use the separate Watch-specific function.
+  // This does not open the iPhone putts selector.
+  const saved = await trackShotBallOnGreenWatch(
+    command.roundId,
+    hole
+  );
+
+  if (saved) {
+    console.log("✅ Apple Watch Ball on Green saved:", {
+      roundId: command.roundId,
+      hole
+    });
+  } else {
+    console.warn("⚠️ Apple Watch Ball on Green not saved");
+  }
 
 }
 
@@ -5622,6 +5645,118 @@ async function trackShotCapturePosition() {
   }
 
   return { latitude, longitude, accuracy };
+}
+
+    async function trackShotBallOnGreenWatch(roundId, hole) {
+  if (trackShotSaving) {
+    console.warn("⌚ Ball on Green: shot tracking busy");
+    return;
+  }
+
+  const rid = Number(roundId);
+  const holeNum = Number(hole);
+
+  if (
+    !Number.isInteger(rid) ||
+    rid <= 0 ||
+    !Number.isInteger(holeNum) ||
+    holeNum < 1 ||
+    holeNum > 18 ||
+    Number(currentRoundId) !== rid
+  ) {
+    console.warn("⌚ Ball on Green: invalid round or hole");
+    return;
+  }
+
+  trackShotSaving = true;
+
+  try {
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    const shots = (response?.shots || []).filter(
+      shot => Number(shot.hole_number) === holeNum
+    );
+
+    if (!shots.length) {
+      throw new Error(
+        "Track at least one shot before marking Ball on Green."
+      );
+    }
+
+    const last = shots[shots.length - 1];
+
+    // Capture the golfer's current GPS position.
+    const position = await trackShotCapturePosition();
+
+    if (Number(currentRoundId) !== rid) {
+      throw new Error("Round changed while saving green.");
+    }
+
+    // Calculate distance from the last tracked shot.
+    const distance = trackShotDistanceMetres(
+      last,
+      position
+    );
+
+    // Save green position using the existing backend.
+    const savedGreen = await api(
+      `/api/rounds/${rid}/shot-green/${holeNum}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          shot_id: Number(last.id),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          distance
+        })
+      }
+    );
+
+    if (!savedGreen?.ok || !savedGreen?.green) {
+      throw new Error("Green position could not be saved.");
+    }
+
+    // Preserve the existing local green-position cache.
+    localStorage.setItem(
+      trackShotGreenKey(rid, holeNum),
+      JSON.stringify({
+        shotId: Number(savedGreen.green.shot_id),
+        latitude: Number(savedGreen.green.latitude),
+        longitude: Number(savedGreen.green.longitude),
+        distance: Number(savedGreen.green.distance),
+        recordedAt: Date.now()
+      })
+    );
+
+    trackShotLastActivity = Date.now();
+
+    // Refresh the shot map and history.
+    if (
+      Number(currentRoundId) === rid &&
+      premiumHoleIndex + 1 === holeNum
+    ) {
+      await trackShotRefresh();
+    }
+
+    console.log("⌚ Ball on Green saved:", {
+      roundId: rid,
+      hole: holeNum,
+      distance
+    });
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      "⌚ Ball on Green failed:",
+      error
+    );
+
+    return false;
+
+  } finally {
+    trackShotSaving = false;
+  }
 }
 
 async function trackShotBallOnGreen() {
