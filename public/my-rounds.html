@@ -5647,10 +5647,20 @@ async function trackShotCapturePosition() {
   return { latitude, longitude, accuracy };
 }
 
-    async function trackShotBallOnGreenWatch(roundId, hole) {
+    
+async function trackShotBallOnGreenWatch(roundId, hole) {
+
+  console.log("🟢 WATCH BALL ON GREEN FUNCTION CALLED", {
+    roundId,
+    hole,
+    currentRoundId,
+    currentHole: premiumHoleIndex + 1,
+    trackShotSaving
+  });
+
   if (trackShotSaving) {
     console.warn("⌚ Ball on Green: shot tracking busy");
-    return;
+    return false;
   }
 
   const rid = Number(roundId);
@@ -5664,18 +5674,29 @@ async function trackShotCapturePosition() {
     holeNum > 18 ||
     Number(currentRoundId) !== rid
   ) {
-    console.warn("⌚ Ball on Green: invalid round or hole");
-    return;
+    console.warn("⌚ Ball on Green: invalid round or hole", {
+      rid,
+      holeNum,
+      currentRoundId
+    });
+    return false;
   }
 
   trackShotSaving = true;
 
   try {
+    console.log("⌚ STEP 1: Loading tracked shots");
+
     const response = await api(`/api/rounds/${rid}/shots`);
 
     const shots = (response?.shots || []).filter(
       shot => Number(shot.hole_number) === holeNum
     );
+
+    console.log("⌚ STEP 2: Tracked shots found", {
+      hole: holeNum,
+      count: shots.length
+    });
 
     if (!shots.length) {
       throw new Error(
@@ -5685,8 +5706,12 @@ async function trackShotCapturePosition() {
 
     const last = shots[shots.length - 1];
 
+    console.log("⌚ STEP 3: Capturing GPS position");
+
     // Capture the golfer's current GPS position.
     const position = await trackShotCapturePosition();
+
+    console.log("⌚ STEP 4: GPS position captured", position);
 
     if (Number(currentRoundId) !== rid) {
       throw new Error("Round changed while saving green.");
@@ -5697,6 +5722,13 @@ async function trackShotCapturePosition() {
       last,
       position
     );
+
+    console.log("⌚ STEP 5: Saving green position", {
+      roundId: rid,
+      hole: holeNum,
+      shotId: Number(last.id),
+      distance
+    });
 
     // Save green position using the existing backend.
     const savedGreen = await api(
@@ -5711,6 +5743,8 @@ async function trackShotCapturePosition() {
         })
       }
     );
+
+    console.log("⌚ STEP 6: Backend response", savedGreen);
 
     if (!savedGreen?.ok || !savedGreen?.green) {
       throw new Error("Green position could not be saved.");
@@ -5730,15 +5764,22 @@ async function trackShotCapturePosition() {
 
     trackShotLastActivity = Date.now();
 
+    console.log("⌚ STEP 7: Green saved locally");
+
     // Refresh the shot map and history.
     if (
       Number(currentRoundId) === rid &&
       premiumHoleIndex + 1 === holeNum
     ) {
+      console.log("⌚ STEP 8: Refreshing shot map");
       await trackShotRefresh();
+    } else {
+      console.warn(
+        "⌚ Map refresh skipped: different hole or round"
+      );
     }
 
-    console.log("⌚ Ball on Green saved:", {
+    console.log("✅ Apple Watch Ball on Green saved:", {
       roundId: rid,
       hole: holeNum,
       distance
@@ -5747,11 +5788,7 @@ async function trackShotCapturePosition() {
     return true;
 
   } catch (error) {
-    console.error(
-      "⌚ Ball on Green failed:",
-      error
-    );
-
+    console.error("❌ Apple Watch Ball on Green failed:", error);
     return false;
 
   } finally {
