@@ -3251,6 +3251,105 @@ body.website-app-promo-open {
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 const API_BASE = "https://teeradar.com.au";
+  
+// ============================================================
+// TEERADAR - RENEW JWT AFTER FACE ID UNLOCK
+// ============================================================
+
+let teeradarRefreshPromise = null;
+
+async function teeradarRefreshAuthToken() {
+  if (teeradarRefreshPromise) {
+    return teeradarRefreshPromise;
+  }
+
+  teeradarRefreshPromise = (async () => {
+    const capacitor = window.Capacitor;
+
+    if (!capacitor?.isNativePlatform?.()) {
+      return false;
+    }
+
+    const biometricPlugin =
+      capacitor.Plugins?.TeeRadarBiometric ||
+      capacitor.registerPlugin?.("TeeRadarBiometric");
+
+    if (!biometricPlugin?.getRefreshToken ||
+        !biometricPlugin?.saveRefreshToken) {
+      console.warn("TeeRadar: Secure token plugin unavailable.");
+      return false;
+    }
+
+    const stored = await biometricPlugin.getRefreshToken();
+    const refreshToken = stored?.refreshToken;
+
+    if (!refreshToken) {
+      console.warn("TeeRadar: No stored refresh token.");
+      return false;
+    }
+
+    const response = await fetch(
+      `${API_BASE}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ refreshToken })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data?.ok ||
+        !data.token || !data.refreshToken) {
+      console.warn(
+        "TeeRadar: Token renewal rejected.",
+        response.status
+      );
+      return false;
+    }
+
+    // Store the rotated refresh token first.
+    await biometricPlugin.saveRefreshToken({
+      refreshToken: data.refreshToken
+    });
+
+    // Then replace the expired or ageing JWT.
+    localStorage.setItem("teeradar_jwt", data.token);
+
+    console.log("TeeRadar: Authentication token renewed.");
+    return true;
+  })();
+
+  try {
+    return await teeradarRefreshPromise;
+  } catch (error) {
+    console.warn(
+      "TeeRadar: Automatic token renewal failed.",
+      error
+    );
+    return false;
+  } finally {
+    teeradarRefreshPromise = null;
+  }
+}
+
+window.addEventListener(
+  "teeradar:biometric-unlocked",
+  async () => {
+    console.log("TeeRadar: Face ID unlock received.");
+
+    const renewed = await teeradarRefreshAuthToken();
+
+    if (!renewed) {
+      console.warn(
+        "TeeRadar: Authentication renewal unsuccessful."
+      );
+    }
+  }
+);
+
 function runAppSplashOnce(){
   const splash = document.getElementById("appSplash");
   const wordEl = document.getElementById("appSplashWord");
@@ -4059,6 +4158,41 @@ const homeCourse =
     "teeradar_jwt",
     data.token
   );
+
+            // ============================================================
+  // TEERADAR - SAVE REFRESH TOKEN SECURELY ON IOS
+  // ============================================================
+
+  if (data.refreshToken) {
+    try {
+      const capacitor = window.Capacitor;
+
+      if (capacitor?.isNativePlatform?.()) {
+        const biometricPlugin =
+          capacitor.Plugins?.TeeRadarBiometric ||
+          capacitor.registerPlugin?.("TeeRadarBiometric");
+
+        if (!biometricPlugin?.saveRefreshToken) {
+          throw new Error(
+            "Native secure token storage is unavailable."
+          );
+        }
+
+        await biometricPlugin.saveRefreshToken({
+          refreshToken: data.refreshToken
+        });
+
+        console.log(
+          "TeeRadar: Refresh token saved securely."
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "TeeRadar: Could not save refresh token.",
+        error
+      );
+    }
+  }
 
   // Record when the user last successfully authenticated.
   localStorage.setItem(
