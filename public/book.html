@@ -3359,14 +3359,75 @@ lastSearchCriteria = {
       renderCourseSkeleton(6);
 
       try {
-        const res = await fetch(`${API_BASE}/api/search`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${BOOK_AUTH_TOKEN}`,
-  },
-  body: JSON.stringify(lastSearchCriteria),
-});
+        
+const searchUrl = `${API_BASE}/api/search`;
+
+async function sendSearchRequest() {
+  return fetch(searchUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${
+        localStorage.getItem("teeradar_jwt") ||
+        BOOK_AUTH_TOKEN
+      }`,
+    },
+    body: JSON.stringify(lastSearchCriteria),
+  });
+}
+
+let res = await sendSearchRequest();
+
+// If the JWT has expired, renew it and retry the search once.
+if (res.status === 401) {
+  console.log("TeeRadar: Search returned 401. Attempting token renewal.");
+
+  try {
+    const biometric = window.Capacitor?.Plugins?.TeeRadarBiometric;
+
+    if (!biometric) {
+      console.warn("TeeRadar: Secure token storage unavailable.");
+    } else {
+      const stored = await biometric.getRefreshToken();
+      const refreshToken = stored?.refreshToken;
+
+      if (refreshToken) {
+        const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (refreshResponse.ok) {
+          const refreshed = await refreshResponse.json();
+
+          if (refreshed?.token && refreshed?.refreshToken) {
+            await biometric.saveRefreshToken({
+              refreshToken: refreshed.refreshToken,
+            });
+
+            localStorage.setItem("teeradar_jwt", refreshed.token);
+
+            console.log("TeeRadar: JWT renewed. Retrying search.");
+
+            res = await sendSearchRequest();
+          }
+        } else {
+          console.warn(
+            "TeeRadar: Token renewal failed:",
+            refreshResponse.status
+          );
+        }
+      } else {
+        console.warn("TeeRadar: No refresh token available.");
+      }
+    }
+  } catch (refreshError) {
+    console.error("TeeRadar: Search token renewal error:", refreshError);
+  }
+}
 
 // ✅ Read as text first so we can debug non-JSON responses (500/HTML/etc)
 const rawText = await res.text();
