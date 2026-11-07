@@ -4,6 +4,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import db from "./db.js";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 
 // Optional: SQLite analytics tracking
 import analyticsDb from "./db/analyticsDb.js";
@@ -33,6 +34,127 @@ function signToken(user) {
       expiresIn: "30d",
     }
   );
+}
+/* =========================================================
+   SECURE REFRESH TOKENS
+   ========================================================= */
+
+function hashRefreshToken(token) {
+  return crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+}
+
+async function createRefreshToken(userId) {
+  const token = crypto.randomBytes(48).toString("hex");
+
+  await db.query(
+    `
+      INSERT INTO auth_refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (
+        $1,
+        $2,
+        NOW() + INTERVAL '90 days'
+      )
+    `,
+    [userId, hashRefreshToken(token)]
+  );
+
+  return token;
+}
+
+async function rotateRefreshToken(token) {
+  if (
+    typeof token !== "string" ||
+    !/^[a-f0-9]{96}$/.test(token)
+  ) {
+    return null;
+  }
+
+  const newToken = crypto.randomBytes(48).toString("hex");
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const result = await client.query(
+      `
+        SELECT
+          rt.id,
+          rt.user_id,
+          u.email
+        FROM auth_refresh_tokens rt
+        JOIN users u ON u.id = rt.user_id
+        WHERE rt.token_hash = $1
+          AND rt.revoked_at IS NULL
+          AND rt.expires_at > NOW()
+        FOR UPDATE OF rt
+      `,
+      [hashRefreshToken(token)]
+    );
+
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    const current = result.rows[0];
+
+    await client.query(
+      `
+        UPDATE auth_refresh_tokens
+        SET
+          revoked_at = NOW(),
+          last_used_at = NOW()
+        WHERE id = $1
+      `,
+      [current.id]
+    );
+
+    await client.query(
+      `
+        INSERT INTO auth_refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES (
+          $1,
+          $2,
+          NOW() + INTERVAL '90 days'
+        )
+      `,
+      [
+        current.user_id,
+        hashRefreshToken(newToken)
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      refreshToken: newToken,
+      user: {
+        id: current.user_id,
+        email: current.email
+      }
+    };
+
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    throw err;
+
+  } finally {
+    client.release();
+  }
 }
 
 /* =========================================================
@@ -395,21 +517,26 @@ authRouter.post(
        * JWT
        */
 
-      const token =
+            const token =
         signToken({
           id: row.id,
           email: row.email,
         });
 
+      const refreshToken =
+        await createRefreshToken(row.id);
+
       /*
        * Return user
        */
 
-      return res.json({
+            return res.json({
         ok: true,
 
         token:
           token || undefined,
+
+        refreshToken,
 
         user: {
           email:
@@ -583,17 +710,22 @@ authRouter.post(
        * JWT
        */
 
-      const token =
+            const token =
         signToken({
           id: user.id,
           email: user.email,
         });
 
-      return res.json({
+      const refreshToken =
+        await createRefreshToken(user.id);
+
+            return res.json({
         ok: true,
 
         token:
           token || undefined,
+
+        refreshToken,
 
         user: {
           email:
@@ -947,5 +1079,50 @@ authRouter.get(
     }
   }
 );
+
+/* =========================================================
+   REFRESH LOGIN SESSION
+   ========================================================= */
+
+authRouter.post("/refresh", async (req, res) => {
+  try {
+    if (!JWT_SECRET) {
+      return res.status(500).json({
+        ok: false,
+        error: "Authentication is not configured"
+      });
+    }
+
+    const refreshToken = req.body?.refreshToken;
+
+    const rotated = await rotateRefreshToken(refreshToken);
+
+    if (!rotated) {
+      return res.status(401).json({
+        ok: false,
+        error: "Refresh session expired or invalid"
+      });
+    }
+
+    const token = signToken(rotated.user);
+
+    return res.json({
+      ok: true,
+      token,
+      refreshToken: rotated.refreshToken
+    });
+
+  } catch (err) {
+    console.error(
+      "Refresh session error:",
+      err?.message
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "Unable to renew session"
+    });
+  }
+});
 
 export default authRouter;
