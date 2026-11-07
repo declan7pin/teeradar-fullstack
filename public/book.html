@@ -2116,9 +2116,13 @@ function loadCachedLocation() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(BOOK_AUTH_TOKEN
-          ? { Authorization: `Bearer ${BOOK_AUTH_TOKEN}` }
-          : {}),
+        ...(localStorage.getItem("teeradar_jwt") || BOOK_AUTH_TOKEN
+  ? {
+      Authorization: `Bearer ${
+        localStorage.getItem("teeradar_jwt") || BOOK_AUTH_TOKEN
+      }`
+    }
+  : {}),
       },
       body: JSON.stringify({
         type,
