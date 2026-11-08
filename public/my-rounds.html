@@ -8626,8 +8626,92 @@ if (providerGreen) {
   };
 }
 
-  return null;
+    return null;
 }
+
+
+// =====================================================
+// SEND CURRENT HOLE GREEN TARGETS TO NATIVE GPS
+// =====================================================
+
+async function syncNativeGpsHoleTargets() {
+
+  const NativeGPS =
+    window.Capacitor?.Plugins?.TeeRadarGPS;
+
+  if (!NativeGPS?.setHoleTargets) {
+    return;
+  }
+
+  const gps = getBestCurrentHoleGps();
+
+  if (!gps) {
+    return;
+  }
+
+  function normalisePoint(point) {
+
+    if (!point) return null;
+
+    const latitude = Number(
+      point.lat ?? point.latitude
+    );
+
+    const longitude = Number(
+      point.lng ?? point.longitude
+    );
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return null;
+    }
+
+    return {
+      latitude,
+      longitude
+    };
+  }
+
+  const front = normalisePoint(gps.front);
+  const middle = normalisePoint(gps.middle);
+  const back = normalisePoint(gps.back);
+
+  if (!front && !middle && !back) {
+    return;
+  }
+
+  try {
+
+    await NativeGPS.setHoleTargets({
+  roundId: String(currentRoundId),
+  hole: premiumHoleIndex + 1,
+  front,
+  middle,
+  back
+});
+
+    console.log(
+      "📍 Native GPS green targets updated",
+      premiumHoleIndex + 1,
+      gps.source
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Native GPS target update failed:",
+      error
+    );
+
+  }
+}
+
 
 function updateGpsDistances(){
   
@@ -15845,6 +15929,14 @@ if (gpsEnabled) {
 } else {
   ensureGpsMap();
 }
+
+// Keep native GPS targets aligned with the selected hole.
+syncNativeGpsHoleTargets().catch(error => {
+  console.warn(
+    "⚠️ Native GPS hole target sync failed:",
+    error
+  );
+});
 // =========================================================
 // TEERADAR — UPDATE FLAG AND FRAME SELECTED HOLE
 // =========================================================
