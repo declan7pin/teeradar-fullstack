@@ -10982,6 +10982,33 @@ gpsPendingJump = null;
       gpsWatchId = null;
     }
 
+        // --------------------------------------------
+    // TEERADAR NATIVE BACKGROUND GPS
+    // --------------------------------------------
+    const TeeRadarGPS =
+      window.Capacitor?.Plugins?.TeeRadarGPS;
+
+    if (TeeRadarGPS) {
+      try {
+        const nativeGpsResult =
+          await TeeRadarGPS.startTracking();
+
+        console.log(
+          "📍 TeeRadar native background GPS started:",
+          nativeGpsResult
+        );
+      } catch (nativeGpsError) {
+        console.warn(
+          "⚠️ Native background GPS failed to start:",
+          nativeGpsError
+        );
+      }
+    } else {
+      console.warn(
+        "⚠️ TeeRadar native GPS plugin unavailable"
+      );
+    }
+
     // --------------------------------------------
     // 4. LIVE GPS WATCH
     // --------------------------------------------
