@@ -11072,6 +11072,31 @@ gpsPendingJump = null;
     const TeeRadarGPS =
       window.Capacitor?.Plugins?.TeeRadarGPS;
 
+    // Compare native GPS against the scorecard GPS.
+// Diagnostic only — does not change scorecard behaviour.
+if (TeeRadarGPS) {
+  TeeRadarGPS.addListener("locationUpdate", (nativePosition) => {
+    if (!gpsEnabled) return;
+
+    const scorecardPosition = currentGpsPosition;
+
+    console.log("📍 TeeRadar GPS comparison", {
+      native: {
+        latitude: nativePosition.latitude,
+        longitude: nativePosition.longitude,
+        accuracy: nativePosition.accuracy
+      },
+      scorecard: scorecardPosition
+        ? {
+            latitude: scorecardPosition.latitude,
+            longitude: scorecardPosition.longitude,
+            accuracy: scorecardPosition.accuracy
+          }
+        : null
+    });
+  });
+}
+
     if (TeeRadarGPS) {
       try {
         const nativeGpsResult =
