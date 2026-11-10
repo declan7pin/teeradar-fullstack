@@ -13269,14 +13269,23 @@ async function initCourseAutocomplete() {
 
         // Existing TeeRadar courses
         const localMatches = coursesCache
-          .filter(c =>
-            norm(
-              c.name ||
-              c.course ||
-              c.title ||
-              ""
-            ).includes(q)
-          )
+  .filter(c => {
+    const courseState = String(
+      c.state || ""
+    ).trim().toUpperCase();
+
+    const courseName = norm(
+      c.name ||
+      c.course ||
+      c.title ||
+      ""
+    );
+
+    return (
+      courseState === stateNow &&
+      courseName.includes(q)
+    );
+  })
           .sort((a, b) => {
             const aBoost =
               String(a.state || "").toUpperCase() === stateNow
@@ -13300,7 +13309,7 @@ async function initCourseAutocomplete() {
         // Search TeeRadar's own worldwide directory.
         // This does NOT perform a paid GolfAPI search.
         const result = await api(
-          `/api/gps/search?q=${encodeURIComponent(query)}&country=ALL`,
+          `/api/gps/search?q=${encodeURIComponent(query)}&country=AU&state=${encodeURIComponent(stateNow)}`,
           { method: "GET" }
         );
 
