@@ -718,57 +718,27 @@ export async function findGolfApiCourses({
 }) {
   await ensureGolfApiCacheSchema();
 
-  /*
-   * First look in TeeRadar Postgres.
-   */
-  const cached =
-    await searchCachedGolfApiCourses({
-      name,
-      state,
-      country,
-    });
+  const cached = await searchCachedGolfApiCourses({
+    name,
+    state,
+    country,
+  });
 
-  if (cached.length > 0) {
-    console.log(
-      `✅ GolfAPI cache search hit: ${cached.length} result(s)`
-    );
-
-    return {
-      source:
-        "cache",
-
-      courses:
-        cached,
-    };
-  }
-
-  /*
-   * Nothing cached.
-   *
-   * GolfAPI search costs 0.1 calls.
-   */
   console.log(
-    "🌐 GolfAPI.io search required"
+    `⛳ TeeRadar directory search: "${name}"`,
+    {
+      state: state || null,
+      country,
+      matches: cached.length,
+    }
   );
 
-  const remote =
-    await searchGolfApiCourses({
-      name,
-      state,
-      country,
-    });
-
   return {
-    source:
-      "api",
-
-    apiRequestsLeft:
-      remote.apiRequestsLeft,
-
-    courses:
-      remote.courses,
+    source: "directory",
+    courses: cached,
   };
 }
+
 
 
 // =========================================================
