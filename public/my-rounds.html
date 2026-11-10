@@ -1576,23 +1576,50 @@ html.round-mode #gpsMapShotActions {
   overscroll-behavior:contain;
 }
 
-.courseOptionCard{
-  padding:16px 18px;
-  border-bottom:1px solid var(--border);
-  background:#fff;
-  cursor:pointer;
+
+.courseOptionCard {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.courseOptionCard:hover{
-  background:#f4fbf9;
+.courseOptionCard:last-child {
+  border-bottom: none;
 }
 
-.courseOptionTitle{
-  font-size:1rem;
-  font-weight:1000;
-  letter-spacing:-.03em;
-  color:var(--text);
+.courseOptionCard:hover {
+  background: #edf8f5;
 }
+
+.courseOptionTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  color: #142d29;
+  margin-bottom: 5px;
+}
+
+.courseOptionMeta {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.courseOptionRating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.courseOptionRating:empty {
+  display: none;
+}
+
 
 .courseOptionMeta{
   margin-top:4px;
