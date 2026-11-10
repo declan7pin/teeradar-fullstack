@@ -4500,55 +4500,546 @@ async function ensureTeeRadarHolePreview(
   }
 }
 
+    // ============================================================
+// APPLE WATCH — RECEIVE COMMANDS
+// ============================================================
+
+let teeRadarWatchListenerRegistered = false;
+
+async function registerTeeRadarWatchCommands() {
+
+  if (teeRadarWatchListenerRegistered) return;
+
+  const Watch =
+    window.Capacitor?.Plugins?.TeeRadarWatch;
+
+  if (!Watch || typeof Watch.addListener !== "function") {
+    return;
+  }
+
+  try {
+
+    await Watch.addListener(
+      "watchCommand",
+      async (command) => {
+
+        console.log(
+          "⌚ Apple Watch command received:",
+          command
+        );
+
+        const roundId = String(command?.roundId || "");
+        const hole = Number(command?.hole);
+
+        if (
+          !currentRound ||
+          String(currentRoundId) !== roundId
+        ) {
+          console.warn(
+            "⌚ Watch command ignored: round mismatch"
+          );
+          return;
+        }
+
+        // Identify the authenticated golfer's scorecard slot.
+const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+const loggedInUserId = Number(
+  tokenPayload.id ??
+  tokenPayload.userId ??
+  tokenPayload.user_id ??
+  tokenPayload.sub
+);
+
+let playerUserIds = currentRound?.player_user_ids || [];
+
+if (typeof playerUserIds === "string") {
+  try {
+    playerUserIds = JSON.parse(playerUserIds);
+  } catch (_) {
+    playerUserIds = [];
+  }
+}
+
+const watchPlayerIndex = Array.isArray(playerUserIds)
+  ? playerUserIds.findIndex(
+      id => Number(id) === loggedInUserId
+    )
+  : -1;
+
+const watchPlayerNumber = watchPlayerIndex + 1;
+
+        const totalHoles =
+          Number(currentRound?.holes) || 18;
+
+        if (
+          !Number.isInteger(hole) ||
+          hole < 1 ||
+          hole > totalHoles
+        ) {
+          console.warn(
+            "⌚ Watch command ignored: invalid hole"
+          );
+          return;
+        }
+
+        
+if (command.type === "change_hole") {
+
+  premiumHoleIndex = hole - 1;
+
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  // Send the confirmed hole back to Apple Watch.
+  await syncTeeRadarLiveActivity();
+
+  console.log(
+    "⌚ Hole changed and synced to Apple Watch:",
+    hole
+  );
+
+  } else if (command.type === "save_score") {
+
+  const strokes = Number(command.strokes);
+
+  if (
+    watchPlayerNumber < 1 ||
+    !Number.isInteger(strokes) ||
+    strokes < 1 ||
+    strokes > 30
+  ) {
+    console.warn(
+      "⌚ Watch score rejected: invalid player or strokes"
+    );
+    return;
+  }
+
+  // Save strokes only, preserving existing putts.
+  await savePremiumPlayerScore(
+    hole,
+    watchPlayerNumber,
+    { strokes }
+  );
+
+  // Update the local scorecard.
+  setHoleValueInTable(
+    hole,
+    "strokes",
+    watchPlayerNumber,
+    strokes
+  );
+
+  // Keep the round's in-memory data updated.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone and Watch score displays.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Watch score saved:", {
+    hole,
+    player: watchPlayerNumber,
+    strokes
+  });
+
+
+       } else if (command.type === "save_putts") {
+
+  const putts = Number(command.putts);
+
+  if (
+    watchPlayerNumber < 1 ||
+    !Number.isInteger(putts) ||
+    putts < 0 ||
+    putts > 20
+  ) {
+    console.warn(
+      "⌚ Watch putts rejected: invalid player or putts"
+    );
+    return;
+  }
+
+  // Save putts only, preserving existing strokes.
+  await savePremiumPlayerScore(
+    hole,
+    watchPlayerNumber,
+    { putts }
+  );
+
+  // Update the local scorecard.
+  setHoleValueInTable(
+    hole,
+    "putts",
+    watchPlayerNumber,
+    putts
+  );
+
+  // Update the round's in-memory data.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone scorecard.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  // Synchronise the latest round data with Apple Watch.
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Watch putts saved:", {
+    hole,
+    player: watchPlayerNumber,
+    putts
+  });
+
+  
+} else if (
+  command.type === "save_combined_score" ||
+  command.type === "save_player_score"
+) {
+
+  const playerNumber =
+    command.type === "save_player_score"
+      ? Number(command.playerNumber)
+      : watchPlayerNumber;
+
+  const strokes = Number(command.strokes);
+  const putts = Number(command.putts);
+
+  if (
+    !Number.isInteger(playerNumber) ||
+    playerNumber < 1 ||
+    playerNumber > 4 ||
+    !Number.isInteger(strokes) ||
+    strokes < 1 ||
+    strokes > 30 ||
+    !Number.isInteger(putts) ||
+    putts < 0 ||
+    putts > strokes
+  ) {
+    console.warn("⌚ Invalid combined score:", command);
+    return;
+  }
+
+  // Save strokes and putts together.
+  await savePremiumPlayerScore(
+    hole,
+    playerNumber,
+    { strokes, putts }
+  );
+
+  // Update both values on the iPhone scorecard.
+  setHoleValueInTable(
+    hole,
+    "strokes",
+    playerNumber,
+    strokes
+  );
+
+  setHoleValueInTable(
+    hole,
+    "putts",
+    playerNumber,
+    putts
+  );
+
+  // Update the round's in-memory hole data.
+  const updatedHole = getHoleRowFromTable(hole);
+
+  if (
+    updatedHole &&
+    Array.isArray(currentRound?.holesData)
+  ) {
+    const index = currentRound.holesData.findIndex(
+      row => Number(row?.hole_number) === hole
+    );
+
+    if (index >= 0) {
+      currentRound.holesData[index] = updatedHole;
+    }
+  }
+
+  // Refresh the iPhone scorecard.
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  // Send updated round information to Apple Watch.
+  await syncTeeRadarLiveActivity();
+
+  console.log("⌚ Combined Watch score saved:", {
+    hole,
+    playerNumber,
+    strokes,
+    putts
+  });
+
+
+
+} else if (command.type === "track_shot") {
+
+  console.log("⌚ Track Shot requested:", {
+    hole,
+    club: command.club
+  });
+
+  // Ensure the iPhone is viewing the correct hole.
+  if (premiumHoleIndex + 1 !== hole) {
+    premiumHoleIndex = hole - 1;
+
+    renderPremiumForHole(
+      currentRound,
+      currentPremiumPars,
+      currentPremiumDistances,
+      currentPremiumTeeName
+    );
+  }
+
+  // Apply the club selected on Apple Watch.
+  const clubSelect = document.getElementById("trackShotClub");
+
+  if (clubSelect && command.club) {
+    const matchingOption = Array.from(clubSelect.options)
+      .find(option =>
+        option.value.toLowerCase() ===
+        String(command.club).toLowerCase()
+      );
+
+    if (matchingOption) {
+      clubSelect.value = matchingOption.value;
+    }
+  }
+
+  // Use TeeRadar's existing GPS shot-saving system.
+    await saveTrackedShot(String(command.club ?? ""));
+
+  console.log("⌚ Apple Watch shot request processed");
+
+} else if (command.type === "ball_on_green") {
+
+  console.log("⌚ Apple Watch Ball on Green requested:", {
+    roundId: command.roundId,
+    hole
+  });
+
+  // Use the separate Watch-specific function.
+  // This does not open the iPhone putts selector.
+  const saved = await trackShotBallOnGreenWatch(
+    command.roundId,
+    hole
+  );
+
+  if (saved) {
+    console.log("✅ Apple Watch Ball on Green saved:", {
+      roundId: command.roundId,
+      hole
+    });
+  } else {
+    console.warn("⚠️ Apple Watch Ball on Green not saved");
+  }
+
+}
+
+      }
+    );
+
+    teeRadarWatchListenerRegistered = true;
+
+    console.log(
+      "⌚ Apple Watch command listener registered"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "⌚ Apple Watch listener failed:",
+      error
+    );
+
+  }
+}
+
+let teeRadarLastWatchPayloadKey = "";
+let teeRadarLastWatchSentAt = 0;
+let teeRadarWatchSendInProgress = false;
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
 
   const LiveActivity = getTeeRadarLiveActivityPlugin();
 
-  if (!LiveActivity) {
-    console.warn("TeeRadar Live Activity plugin unavailable");
-    return;
-  }
+  // Apple Watch Capacitor plugin
+  const Watch =
+    window.Capacitor?.Plugins?.TeeRadarWatch;
 
   try {
     const payload = buildTeeRadarLiveActivityPayload();
 
     if (!payload) return;
 
-// Generate the current hole preview only once per app session.
-const previewCoordinates =
-  getTeeRadarHolePreviewCoordinates();
+    // =====================================================
+    // SEND CURRENT ROUND TO APPLE WATCH
+    // =====================================================
 
-console.log("🗺️ TeeRadar preview diagnostic:", {
-  hole: payload.hole,
-  previewKey: payload.holePreviewId,
-  coordinates: previewCoordinates,
-  generatorAvailable:
-    typeof LiveActivity.generateHolePreview === "function"
-});
+  if (Watch && typeof Watch.sendRound === "function") {
+  const watchData = {
+    roundId: String(payload.roundId),
+    courseName: payload.courseName,
+    hole: payload.hole,
+    totalHoles: payload.totalHoles,
+    par: payload.par,
+    frontDistance: payload.frontDistance,
+    middleDistance: payload.middleDistance,
+    backDistance: payload.backDistance,
+    holeScore: payload.holeScore,
+    totalScoreToPar: payload.totalScoreToPar,
+    playerNumber: Math.max(
+      1,
+      Number(currentRound?.player_number) || 1
+    )
+  };
 
-if (previewCoordinates) {
-  try {
-    await ensureTeeRadarHolePreview(
-      LiveActivity,
-      payload.holePreviewId,
-      previewCoordinates
-    );
-  } catch (previewError) {
-    console.warn(
-      "⚠️ Satellite hole preview unavailable:",
-      previewError
-    );
+  // Identify important changes independently of GPS distances.
+  const watchKey = JSON.stringify({
+    roundId: watchData.roundId,
+    courseName: watchData.courseName,
+    hole: watchData.hole,
+    totalHoles: watchData.totalHoles,
+    par: watchData.par,
+    holeScore: watchData.holeScore,
+    totalScoreToPar: watchData.totalScoreToPar,
+    playerNumber: watchData.playerNumber
+  });
+
+  const now = Date.now();
+  const importantChange =
+    watchKey !== teeRadarLastWatchPayloadKey;
+
+  const distanceRefreshDue =
+    now - teeRadarLastWatchSentAt >= 10000;
+
+  if (
+    !teeRadarWatchSendInProgress &&
+    (importantChange || distanceRefreshDue)
+  ) {
+    teeRadarWatchSendInProgress = true;
+
+    try {
+      await Watch.sendRound(watchData);
+
+      teeRadarLastWatchPayloadKey = watchKey;
+      teeRadarLastWatchSentAt = Date.now();
+
+      console.log(
+        "⌚ TeeRadar Apple Watch update sent",
+        watchData
+      );
+    } catch (watchError) {
+      console.warn(
+        "⚠️ TeeRadar Apple Watch sync failed:",
+        watchError
+      );
+    } finally {
+      teeRadarWatchSendInProgress = false;
+    }
   }
 }
 
+    // =====================================================
+    // EXISTING IPHONE LIVE ACTIVITY
+    // =====================================================
+
+    if (!LiveActivity) {
+      console.warn(
+        "TeeRadar Live Activity plugin unavailable"
+      );
+      return;
+    }
+
+    // Generate the current hole preview only once
+    // per app session.
+    const previewCoordinates =
+      getTeeRadarHolePreviewCoordinates();
+
+    console.log("🗺️ TeeRadar preview diagnostic:", {
+      hole: payload.hole,
+      previewKey: payload.holePreviewId,
+      coordinates: previewCoordinates,
+      generatorAvailable:
+        typeof LiveActivity.generateHolePreview === "function"
+    });
+
+    if (previewCoordinates) {
+      try {
+        console.time("⏱️ TeeRadar satellite preview");
+
+try {
+  await ensureTeeRadarHolePreview(
+    LiveActivity,
+    payload.holePreviewId,
+    previewCoordinates
+  );
+} finally {
+  console.timeEnd("⏱️ TeeRadar satellite preview");
+}
+      } catch (previewError) {
+        console.warn(
+          "⚠️ Satellite hole preview unavailable:",
+          previewError
+        );
+      }
+    }
+
     const roundId = String(payload.roundId);
 
-    if (String(teeRadarLiveActivityRoundId || "") !== roundId) {
+    if (
+      String(teeRadarLiveActivityRoundId || "") !== roundId
+    ) {
       await LiveActivity.start({
-  ...payload,
-  holePreviewKey: payload.holePreviewId
-});
+        ...payload,
+        holePreviewKey: payload.holePreviewId
+      });
 
       teeRadarLiveActivityRoundId = roundId;
 
@@ -4561,18 +5052,18 @@ if (previewCoordinates) {
     }
 
     await LiveActivity.update({
-  hole: payload.hole,
-  totalHoles: payload.totalHoles,
-  par: payload.par,
-  frontDistance: payload.frontDistance,
-  middleDistance: payload.middleDistance,
-  backDistance: payload.backDistance,
-  holeScore: payload.holeScore,
-  totalScoreToPar: payload.totalScoreToPar,
+      hole: payload.hole,
+      totalHoles: payload.totalHoles,
+      par: payload.par,
+      frontDistance: payload.frontDistance,
+      middleDistance: payload.middleDistance,
+      backDistance: payload.backDistance,
+      holeScore: payload.holeScore,
+      totalScoreToPar: payload.totalScoreToPar,
 
-  // Current hole image identifier
-  holePreviewKey: payload.holePreviewId
-});
+      // Current hole image identifier
+      holePreviewKey: payload.holePreviewId
+    });
 
     console.log(
       "✅ TeeRadar Live Activity updated",
@@ -4586,6 +5077,7 @@ if (previewCoordinates) {
     );
   }
 }
+
 
 async function endTeeRadarLiveActivity() {
   const LiveActivity = getTeeRadarLiveActivityPlugin();
@@ -5153,6 +5645,155 @@ async function trackShotCapturePosition() {
   }
 
   return { latitude, longitude, accuracy };
+}
+
+    
+async function trackShotBallOnGreenWatch(roundId, hole) {
+
+  console.log("🟢 WATCH BALL ON GREEN FUNCTION CALLED", {
+    roundId,
+    hole,
+    currentRoundId,
+    currentHole: premiumHoleIndex + 1,
+    trackShotSaving
+  });
+
+  if (trackShotSaving) {
+    console.warn("⌚ Ball on Green: shot tracking busy");
+    return false;
+  }
+
+  const rid = Number(roundId);
+  const holeNum = Number(hole);
+
+  if (
+    !Number.isInteger(rid) ||
+    rid <= 0 ||
+    !Number.isInteger(holeNum) ||
+    holeNum < 1 ||
+    holeNum > 18 ||
+    Number(currentRoundId) !== rid
+  ) {
+    console.warn("⌚ Ball on Green: invalid round or hole", {
+      rid,
+      holeNum,
+      currentRoundId
+    });
+    return false;
+  }
+
+  trackShotSaving = true;
+
+  try {
+    console.log("⌚ STEP 1: Loading tracked shots");
+
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    const shots = (response?.shots || []).filter(
+      shot => Number(shot.hole_number) === holeNum
+    );
+
+    console.log("⌚ STEP 2: Tracked shots found", {
+      hole: holeNum,
+      count: shots.length
+    });
+
+    if (!shots.length) {
+      throw new Error(
+        "Track at least one shot before marking Ball on Green."
+      );
+    }
+
+    const last = shots[shots.length - 1];
+
+    console.log("⌚ STEP 3: Capturing GPS position");
+
+    // Capture the golfer's current GPS position.
+    const position = await trackShotCapturePosition();
+
+    console.log("⌚ STEP 4: GPS position captured", position);
+
+    if (Number(currentRoundId) !== rid) {
+      throw new Error("Round changed while saving green.");
+    }
+
+    // Calculate distance from the last tracked shot.
+    const distance = trackShotDistanceMetres(
+      last,
+      position
+    );
+
+    console.log("⌚ STEP 5: Saving green position", {
+      roundId: rid,
+      hole: holeNum,
+      shotId: Number(last.id),
+      distance
+    });
+
+    // Save green position using the existing backend.
+    const savedGreen = await api(
+      `/api/rounds/${rid}/shot-green/${holeNum}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          shot_id: Number(last.id),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          distance
+        })
+      }
+    );
+
+    console.log("⌚ STEP 6: Backend response", savedGreen);
+
+    if (!savedGreen?.ok || !savedGreen?.green) {
+      throw new Error("Green position could not be saved.");
+    }
+
+    // Preserve the existing local green-position cache.
+    localStorage.setItem(
+      trackShotGreenKey(rid, holeNum),
+      JSON.stringify({
+        shotId: Number(savedGreen.green.shot_id),
+        latitude: Number(savedGreen.green.latitude),
+        longitude: Number(savedGreen.green.longitude),
+        distance: Number(savedGreen.green.distance),
+        recordedAt: Date.now()
+      })
+    );
+
+    trackShotLastActivity = Date.now();
+
+    console.log("⌚ STEP 7: Green saved locally");
+
+    // Refresh the shot map and history.
+    if (
+      Number(currentRoundId) === rid &&
+      premiumHoleIndex + 1 === holeNum
+    ) {
+      console.log("⌚ STEP 8: Refreshing shot map");
+      await trackShotRefresh();
+    } else {
+      console.warn(
+        "⌚ Map refresh skipped: different hole or round"
+      );
+    }
+
+    console.log("✅ Apple Watch Ball on Green saved:", {
+      roundId: rid,
+      hole: holeNum,
+      distance
+    });
+
+    return true;
+
+  } catch (error) {
+    console.error("❌ Apple Watch Ball on Green failed:", error);
+    return false;
+
+  } finally {
+    trackShotSaving = false;
+  }
 }
 
 async function trackShotBallOnGreen() {
@@ -6181,8 +6822,7 @@ async function calculateTrackedHoleStrokes(
     parent.appendChild(overlay);
   });
 }
-
-async function saveTrackedShot() {
+async function saveTrackedShot(watchClub = null) {
   const button = document.getElementById(
     "trackShotBtn"
   );
@@ -6230,8 +6870,11 @@ async function saveTrackedShot() {
   // the golfer is selecting a club.
   trackShotSaving = true;
 
-  // Ask for the club before capturing GPS.
-  const club = await promptTrackShotClub();
+    // Apple Watch supplies its selected club directly.
+  // Manual iPhone tracking still asks for a club.
+  const club = watchClub !== null
+    ? String(watchClub).trim()
+    : await promptTrackShotClub();
 
   // Cancel means no shot is recorded.
   if (club === null) {
@@ -7983,8 +8626,92 @@ if (providerGreen) {
   };
 }
 
-  return null;
+    return null;
 }
+
+
+// =====================================================
+// SEND CURRENT HOLE GREEN TARGETS TO NATIVE GPS
+// =====================================================
+
+async function syncNativeGpsHoleTargets() {
+
+  const NativeGPS =
+    window.Capacitor?.Plugins?.TeeRadarGPS;
+
+  if (!NativeGPS?.setHoleTargets) {
+    return;
+  }
+
+  const gps = getBestCurrentHoleGps();
+
+  if (!gps) {
+    return;
+  }
+
+  function normalisePoint(point) {
+
+    if (!point) return null;
+
+    const latitude = Number(
+      point.lat ?? point.latitude
+    );
+
+    const longitude = Number(
+      point.lng ?? point.longitude
+    );
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return null;
+    }
+
+    return {
+      latitude,
+      longitude
+    };
+  }
+
+  const front = normalisePoint(gps.front);
+  const middle = normalisePoint(gps.middle);
+  const back = normalisePoint(gps.back);
+
+  if (!front && !middle && !back) {
+    return;
+  }
+
+  try {
+
+    await NativeGPS.setHoleTargets({
+  roundId: String(currentRoundId),
+  hole: premiumHoleIndex + 1,
+  front,
+  middle,
+  back
+});
+
+    console.log(
+      "📍 Native GPS green targets updated",
+      premiumHoleIndex + 1,
+      gps.source
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Native GPS target update failed:",
+      error
+    );
+
+  }
+}
+
 
 function updateGpsDistances(){
   
@@ -10337,6 +11064,58 @@ gpsPendingJump = null;
       }
 
       gpsWatchId = null;
+    }
+
+        // --------------------------------------------
+    // TEERADAR NATIVE BACKGROUND GPS
+    // --------------------------------------------
+    const TeeRadarGPS =
+      window.Capacitor?.Plugins?.TeeRadarGPS;
+
+    // Compare native GPS against the scorecard GPS.
+// Diagnostic only — does not change scorecard behaviour.
+if (TeeRadarGPS) {
+  TeeRadarGPS.addListener("locationUpdate", (nativePosition) => {
+    if (!gpsEnabled) return;
+
+    const scorecardPosition = currentGpsPosition;
+
+    console.log("📍 TeeRadar GPS comparison", {
+      native: {
+        latitude: nativePosition.latitude,
+        longitude: nativePosition.longitude,
+        accuracy: nativePosition.accuracy
+      },
+      scorecard: scorecardPosition
+        ? {
+            latitude: scorecardPosition.latitude,
+            longitude: scorecardPosition.longitude,
+            accuracy: scorecardPosition.accuracy
+          }
+        : null
+    });
+  });
+}
+
+    if (TeeRadarGPS) {
+      try {
+        const nativeGpsResult =
+          await TeeRadarGPS.startTracking();
+
+        console.log(
+          "📍 TeeRadar native background GPS started:",
+          nativeGpsResult
+        );
+      } catch (nativeGpsError) {
+        console.warn(
+          "⚠️ Native background GPS failed to start:",
+          nativeGpsError
+        );
+      }
+    } else {
+      console.warn(
+        "⚠️ TeeRadar native GPS plugin unavailable"
+      );
     }
 
     // --------------------------------------------
@@ -15175,6 +15954,14 @@ if (gpsEnabled) {
 } else {
   ensureGpsMap();
 }
+
+// Keep native GPS targets aligned with the selected hole.
+syncNativeGpsHoleTargets().catch(error => {
+  console.warn(
+    "⚠️ Native GPS hole target sync failed:",
+    error
+  );
+});
 // =========================================================
 // TEERADAR — UPDATE FLAG AND FRAME SELECTED HOLE
 // =========================================================
@@ -18973,6 +19760,11 @@ if (holePickerBack){
 }
 
     (async function init(){
+        // ============================================================
+  // APPLE WATCH — ACTIVATE COMMAND LISTENER
+  // ============================================================
+
+  await registerTeeRadarWatchCommands();
 
   /*
    * PLAY / MY ROUNDS IS ACCOUNT-ONLY.
