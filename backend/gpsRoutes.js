@@ -195,21 +195,9 @@ router.get(
           .toUpperCase();
 
       const country =
-        golfApiCountryName(
-          countryCode
-        );
-
-      if (!country) {
-        return res.status(400).json({
-          ok: false,
-
-          error:
-            "Only Australian GolfAPI searches are currently enabled",
-
-          country:
-            countryCode,
-        });
-      }
+  countryCode === "ALL"
+    ? null
+    : golfApiCountryName(countryCode);
 
 
       // -------------------------------------------------
