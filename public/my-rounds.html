@@ -12659,11 +12659,45 @@ function showCourseAutocomplete(items){
     const div = document.createElement("div");
     div.className = "courseOptionCard";
 
-    const baseName =
-      c.name ||
-      c.course ||
-      c.title ||
-      "";
+    const isGolfApi =
+  c?._golfapi_result === true;
+
+const clubName =
+  String(
+    c.club ||
+    c.clubName ||
+    ""
+  ).trim();
+
+const layoutName =
+  String(
+    c.course ||
+    c.courseName ||
+    ""
+  ).trim();
+
+const baseName =
+  isGolfApi
+    ? (
+        clubName ||
+        layoutName ||
+        c.name ||
+        ""
+      )
+    : (
+        c.name ||
+        c.course ||
+        c.title ||
+        ""
+      );
+
+const displayName =
+  isGolfApi &&
+  layoutName &&
+  layoutName.toLowerCase() !==
+    baseName.toLowerCase()
+    ? `${baseName} — ${layoutName}`
+    : baseName;
 
     const st =
       String(c.state || "")
@@ -12686,7 +12720,7 @@ function showCourseAutocomplete(items){
 
     div.innerHTML = `
       <div class="courseOptionTitle">
-        ${escapeHtml(baseName)}${h ? ` (${h} holes)` : ""}
+        ${escapeHtml(displayName)}${h ? ` (${h} holes)` : ""}
       </div>
 
       <div class="courseOptionMeta">
@@ -13175,159 +13209,150 @@ showCourseAutocomplete([
   }
 }
     
-    async function initCourseAutocomplete(){
+   
+async function initCourseAutocomplete() {
   if (!courseEl || !courseAutoList) return;
 
-  courseEl.addEventListener(
-    "input",
-    async () => {
-      const q =
-        norm(
-          courseEl.value
+  let searchTimer = null;
+  let searchSequence = 0;
+
+  courseEl.addEventListener("input", () => {
+    const query = courseEl.value.trim();
+    const q = norm(query);
+    const sequence = ++searchSequence;
+
+    selectedCourseKey = "";
+
+    clearTimeout(searchTimer);
+
+    courseAutoList.style.display = "none";
+    courseAutoList.innerHTML = "";
+
+    if (q.length < 2) return;
+
+    searchTimer = setTimeout(async () => {
+      try {
+        await loadCoursesOnce();
+
+        if (sequence !== searchSequence) return;
+
+        const stateNow = String(
+          stateEl?.value || ""
+        ).trim().toUpperCase();
+
+        // Existing TeeRadar courses
+        const localMatches = coursesCache
+          .filter(c =>
+            norm(
+              c.name ||
+              c.course ||
+              c.title ||
+              ""
+            ).includes(q)
+          )
+          .sort((a, b) => {
+            const aBoost =
+              String(a.state || "").toUpperCase() === stateNow
+                ? 0
+                : 1;
+
+            const bBoost =
+              String(b.state || "").toUpperCase() === stateNow
+                ? 0
+                : 1;
+
+            return (
+              aBoost - bBoost ||
+              norm(a.name || "").localeCompare(
+                norm(b.name || "")
+              )
+            );
+          })
+          .slice(0, 10);
+
+        // Search TeeRadar's own worldwide directory.
+        // This does NOT perform a paid GolfAPI search.
+        const result = await api(
+          `/api/gps/search?q=${encodeURIComponent(query)}&country=ALL`,
+          { method: "GET" }
         );
 
-      selectedCourseKey = "";
+        if (sequence !== searchSequence) return;
 
-      courseAutoList.style.display =
-        "none";
+        const directoryCourses = Array.isArray(result?.courses)
+          ? result.courses
+          : [];
 
-      courseAutoList.innerHTML =
-        "";
+        const directoryMatches = directoryCourses.map(c => ({
+          name: golfApiCourseDisplayName(c),
+          club: c.club || c.clubName || "",
+          course: c.course || c.courseName || "",
+          state: String(c.state || "").trim(),
+          country: String(c.country || "").trim(),
+          holes: Number(c.numHoles ?? c.holes) || null,
+          provider_course_id: String(
+            c.provider_course_id || c.courseID || c.id || ""
+          ).trim(),
+          _golfapi_result: true,
+          _golfapi_original: c
+        }));
 
-      if (
-        !q ||
-        q.length < 2
-      ) {
-        return;
+        // Avoid showing the same GolfAPI course twice.
+        const seenProviderIds = new Set();
+
+        const uniqueDirectoryMatches = directoryMatches.filter(c => {
+          if (!c.provider_course_id) return false;
+
+          if (seenProviderIds.has(c.provider_course_id)) {
+            return false;
+          }
+
+          seenProviderIds.add(c.provider_course_id);
+          return true;
+        });
+
+        // Show local courses first, followed by directory results.
+        showCourseAutocomplete([
+          ...localMatches,
+          ...uniqueDirectoryMatches
+        ]);
+
+      } catch (error) {
+        if (sequence !== searchSequence) return;
+
+        console.error(
+          "Course autocomplete search failed:",
+          error
+        );
       }
+    }, 300);
+  });
 
-      await loadCoursesOnce();
+  // Enter remains available as a manual search option.
+  courseEl.addEventListener("keydown", async event => {
+    if (event.key !== "Enter") return;
 
-      const stateNow =
-        (
-          stateEl?.value || ""
-        )
-          .trim()
-          .toUpperCase();
+    event.preventDefault();
 
-      const matches =
-        coursesCache
-          .filter(
-            c =>
-              norm(
-                c.name ||
-                c.course ||
-                c.title
-              ).includes(q)
-          )
-          .sort(
-            (a,b) => {
-              const aState =
-                String(
-                  a.state || ""
-                ).toUpperCase();
+    clearTimeout(searchTimer);
+    ++searchSequence;
 
-              const bState =
-                String(
-                  b.state || ""
-                ).toUpperCase();
+    await searchGolfApiCourseFromEnter();
+  });
 
-              const aBoost =
-                (
-                  stateNow &&
-                  aState === stateNow
-                )
-                  ? -1
-                  : 0;
-
-              const bBoost =
-                (
-                  stateNow &&
-                  bState === stateNow
-                )
-                  ? -1
-                  : 0;
-
-              if (
-                aBoost !== bBoost
-              ) {
-                return (
-                  aBoost -
-                  bBoost
-                );
-              }
-
-              return norm(
-                a.name
-              ).localeCompare(
-                norm(b.name)
-              );
-            }
-          )
-          .slice(
-            0,
-            10
-          );
-
-      showCourseAutocomplete(
-        matches
-      );
+  document.addEventListener("click", e => {
+    if (
+      e.target === courseEl ||
+      courseAutoList.contains(e.target)
+    ) {
+      return;
     }
-  );
 
-    // -------------------------------------------------------
-  // ENTER = SEARCH FOR A NEW COURSE
-  //
-  // Typing never calls GolfAPI.
-  // GolfAPI is only allowed after an intentional Enter.
-  // -------------------------------------------------------
-
-  courseEl.addEventListener(
-    "keydown",
-    async (event) => {
-
-      if (
-        event.key !==
-        "Enter"
-      ) {
-        return;
-      }
-
-      /*
-       * Prevent Enter accidentally triggering any other
-       * form/button behaviour.
-       */
-      event.preventDefault();
-
-      await searchGolfApiCourseFromEnter();
-    }
-  );
-      
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (
-        e.target === courseEl
-      ) {
-        return;
-      }
-
-      if (
-        courseAutoList.contains(
-          e.target
-        )
-      ) {
-        return;
-      }
-
-      courseAutoList.style.display =
-        "none";
-
-      courseAutoList.innerHTML =
-        "";
-    }
-  );
+    courseAutoList.style.display = "none";
+    courseAutoList.innerHTML = "";
+  });
 }
+
 
     function syncNineLoopVisibility(){
       const holesNow = Number(holesEl?.value || 18);
