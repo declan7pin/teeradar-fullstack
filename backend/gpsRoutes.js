@@ -1328,4 +1328,219 @@ router.delete(
   }
 );
 
+
+ // =========================================================
+ // TEERADAR ADMIN GREEN POINTS
+ // Separate corrections from GolfAPI source coordinates
+ // =========================================================
+
+ let greenTablePromise = null;
+
+ async function ensureGreenPointsTable() {
+   if (!greenTablePromise) {
+     greenTablePromise = (async () => {
+       await db.query(`
+         CREATE TABLE IF NOT EXISTS teeradar_green_points (
+           provider_course_id TEXT NOT NULL,
+           hole_number INTEGER NOT NULL
+             CHECK (hole_number BETWEEN 1 AND 36),
+           latitude DOUBLE PRECISION NOT NULL
+             CHECK (latitude BETWEEN -90 AND 90),
+           longitude DOUBLE PRECISION NOT NULL
+             CHECK (longitude BETWEEN -180 AND 180),
+           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           PRIMARY KEY (provider_course_id, hole_number)
+         )
+       `);
+
+       await db.query(`
+         CREATE TABLE IF NOT EXISTS teeradar_shared_nine_greens (
+           club_key TEXT NOT NULL,
+           nine_name TEXT NOT NULL,
+           nine_hole INTEGER NOT NULL
+             CHECK (nine_hole BETWEEN 1 AND 9),
+           latitude DOUBLE PRECISION NOT NULL
+             CHECK (latitude BETWEEN -90 AND 90),
+           longitude DOUBLE PRECISION NOT NULL
+             CHECK (longitude BETWEEN -180 AND 180),
+           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           PRIMARY KEY (club_key, nine_name, nine_hole)
+         )
+       `);
+     })().catch(error => {
+       greenTablePromise = null;
+       throw error;
+     });
+   }
+
+   await greenTablePromise;
+ }
+
+ router.get(
+   "/course/:providerCourseId/admin-greens",
+   requireAuth,
+   async (req, res) => {
+     try {
+       const courseId = String(
+         req.params.providerCourseId || ""
+       ).trim();
+
+       if (!courseId) {
+         return res.status(400).json({
+           ok: false,
+           error: "Course ID required"
+         });
+       }
+
+       await ensureGreenPointsTable();
+
+       const legacy = await db.query(
+         `SELECT hole_number, latitude, longitude
+          FROM teeradar_green_points
+          WHERE provider_course_id = $1`,
+         [courseId]
+       );
+
+       const byHole = new Map(
+         legacy.rows.map(row => [
+           Number(row.hole_number),
+           row
+         ])
+       );
+
+       if (COLLIER_LAYOUTS[courseId]) {
+         const shared = await db.query(
+           `SELECT nine_name, nine_hole, latitude, longitude
+            FROM teeradar_shared_nine_greens
+            WHERE club_key = 'collier-park-wa'`
+         );
+
+         for (let hole = 1; hole <= 18; hole++) {
+           const nine = sharedNineForHole(courseId, hole);
+           const correction = shared.rows.find(
+             row =>
+               row.nine_name === nine.nineName &&
+               Number(row.nine_hole) === nine.nineHole
+           );
+
+           if (correction) {
+             byHole.set(hole, {
+               hole_number: hole,
+               latitude: correction.latitude,
+               longitude: correction.longitude
+             });
+           }
+         }
+       }
+
+       return res.json({
+         ok: true,
+         provider_course_id: courseId,
+         greens: [...byHole.values()].sort(
+           (a, b) =>
+             Number(a.hole_number) - Number(b.hole_number)
+         )
+       });
+     } catch (error) {
+       console.error("Load admin greens failed:", error);
+       return res.status(500).json({
+         ok: false,
+         error: "Could not load green corrections"
+       });
+     }
+   }
+ );
+
+ router.put(
+   "/course/:providerCourseId/admin-greens/:hole",
+   requireAuth,
+   async (req, res) => {
+     try {
+       if (!(await isTeeAdmin(req))) {
+         return res.status(403).json({
+           ok: false,
+           error: "Admin access required"
+         });
+       }
+
+       const courseId = String(
+         req.params.providerCourseId || ""
+       ).trim();
+
+       const hole = Number(req.params.hole);
+       const lat = req.body?.lat;
+       const lng = req.body?.lng;
+
+       if (
+         !courseId ||
+         courseId.length > 200 ||
+         !Number.isInteger(hole) ||
+         hole < 1 ||
+         hole > 36 ||
+         !validCoordinates(lat, lng)
+       ) {
+         return res.status(400).json({
+           ok: false,
+           error: "Invalid green coordinates"
+         });
+       }
+
+       await ensureGreenPointsTable();
+
+       const nine = sharedNineForHole(courseId, hole);
+
+       if (nine) {
+         await db.query(
+           `INSERT INTO teeradar_shared_nine_greens
+              (club_key, nine_name, nine_hole,
+               latitude, longitude)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (club_key, nine_name, nine_hole)
+            DO UPDATE SET
+              latitude = EXCLUDED.latitude,
+              longitude = EXCLUDED.longitude,
+              updated_at = NOW()`,
+           [
+             nine.clubKey,
+             nine.nineName,
+             nine.nineHole,
+             lat,
+             lng
+           ]
+         );
+       } else {
+         await db.query(
+           `INSERT INTO teeradar_green_points
+              (provider_course_id, hole_number,
+               latitude, longitude)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (provider_course_id, hole_number)
+            DO UPDATE SET
+              latitude = EXCLUDED.latitude,
+              longitude = EXCLUDED.longitude,
+              updated_at = NOW()`,
+           [courseId, hole, lat, lng]
+         );
+       }
+
+       return res.json({
+         ok: true,
+         green: {
+           provider_course_id: courseId,
+           hole_number: hole,
+           latitude: lat,
+           longitude: lng
+         }
+       });
+     } catch (error) {
+       console.error("Save admin green failed:", error);
+       return res.status(500).json({
+         ok: false,
+         error: "Could not save green coordinates"
+       });
+     }
+   }
+ );
+
+
 export default router;
