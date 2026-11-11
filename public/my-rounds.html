@@ -5143,6 +5143,9 @@ let backendHandicap = null;
     let coursesCache = [];
     let coursesLoaded = false;
     let selectedCourseKey = "";
+    // GolfAPI course ID selected when creating a round.
+// Keep as a string to preserve large provider IDs.
+let selectedGolfApiCourseId = null;
 
     // scorecards cache
     const scorecardsByState = new Map(); // st -> array
@@ -12857,6 +12860,19 @@ const displayName =
             return;
           }
         }
+                // Remember the exact GolfAPI course ID.
+        // Courses without an ID continue using existing lookup.
+        selectedGolfApiCourseId =
+          c?._golfapi_result === true &&
+          c?.provider_course_id
+            ? String(c.provider_course_id).trim()
+            : null;
+
+        console.log(
+          "⛳ Selected GolfAPI course ID:",
+          selectedGolfApiCourseId
+        );
+
         courseEl.value =
           baseName;
 
@@ -18473,6 +18489,11 @@ async function createRound(){
     course,
     state,
     holes,
+
+    provider_course_id:
+  selectedGolfApiCourseId
+    ? String(selectedGolfApiCourseId).trim()
+    : null,
 
     layout:
       layout || null,
