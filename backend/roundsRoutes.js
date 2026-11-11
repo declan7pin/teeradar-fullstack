@@ -2191,6 +2191,7 @@ RETURNING id;
 export async function createRoundWithSeededHoles({
   userId,
   course,
+  provider_course_id = null,
   layout = null,
   state = null,
   holes = 18,
@@ -2452,11 +2453,12 @@ export async function createRoundWithSeededHoles({
       const roundInsert = await client.query(
         `
         INSERT INTO rounds (
-          user_id,
-          course,
-          layout,
-          state,
-          holes,
+  user_id,
+  course,
+  provider_course_id,
+  layout,
+  state,
+  holes,
           par_mode,
           players_count,
           player_names,
@@ -2465,15 +2467,16 @@ export async function createRoundWithSeededHoles({
           linked_master_round_id,
           linked_player_number
         )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12
-        )
+       VALUES (
+  $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12,$13
+)
         RETURNING
-          id,
-          user_id,
-          course,
-          layout,
-          state,
+  id,
+  user_id,
+  course,
+  provider_course_id,
+  layout,
+  state,
           holes,
           par_mode,
           created_at,
@@ -2485,11 +2488,14 @@ export async function createRoundWithSeededHoles({
           linked_player_number;
         `,
         [
-          Number(userId),
-          String(course).trim(),
-          layoutName,
-          stateCode,
-          holesNum,
+  Number(userId),
+  String(course).trim(),
+  provider_course_id
+    ? String(provider_course_id).trim()
+    : null,
+  layoutName,
+  stateCode,
+  holesNum,
           finalParMode,
           playersCount,
           JSON.stringify(playerNames),
@@ -2634,13 +2640,14 @@ export async function createRoundWithSeededHoles({
 
   try {
     const verifyRound = await db.query(
-      `
-      SELECT
-        id,
-        user_id,
-        course,
-        layout,
-        state,
+  `
+  SELECT
+    id,
+    user_id,
+    course,
+    provider_course_id,
+    layout,
+    state,
         holes,
         par_mode,
         created_at,
@@ -3553,8 +3560,9 @@ router.post("/", requireAuth, async (req, res) => {
   const userId = req.user?.id;
 
   try {
-    const {
+   const {
   course,
+  provider_course_id = null,
   layout = null,
   state = null,
   holes = 18,
@@ -3567,11 +3575,12 @@ router.post("/", requireAuth, async (req, res) => {
 } = req.body || {};
 
     const result = await createRoundWithSeededHoles({
-      userId,
-      course,
-      layout,
-      state,
-      holes,
+  userId,
+  course,
+  provider_course_id,
+  layout,
+  state,
+  holes,
       par_mode,
       publishedPars,
       players_count,
