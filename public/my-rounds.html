@@ -11550,88 +11550,81 @@ function setLeftPanelsVisibility(show){
       }
     );
 
+    // Exact GolfAPI ID for The Grange West Course.
+// Preserve existing lookup behaviour for all other courses.
+const directProviderId =
+  roundState.toUpperCase() === "SA" &&
+  /\bthe grange golf club\b/i.test(rawCourseName) &&
+  /\bwest course\b/i.test(rawCourseName)
+    ? "0121325752402791904"
+    : null;
+
 
     // =====================================================
     // 1. SEARCH PROVIDER COURSE
     // =====================================================
 
-    const searchResponse =
-      await fetch(
-        `${API_BASE}/api/gps/search?q=${encodeURIComponent(
-          courseName
-        )}&state=${encodeURIComponent(
-          roundState
-        )}&country=AU`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      );
+   let courses = [];
 
+if (directProviderId) {
+  console.log(
+    "✅ TeeRadar using exact GolfAPI course ID:",
+    directProviderId
+  );
 
-    const searchText =
-      await searchResponse.text();
+  courses = [{
+    id: directProviderId,
+    name: "The Grange Golf Club",
+    club: "The Grange Golf Club",
+    course: "West Course",
+    state: stateNameForGolfApi(roundState)
+  }];
 
-    let searchData = null;
-
-
-    try {
-
-      searchData =
-        JSON.parse(
-          searchText
-        );
-
-    } catch (error) {
-
-      console.warn(
-        "⚠️ Could not parse GPS search response:",
-        searchText
-      );
+} else {
+  const searchResponse = await fetch(
+    `${API_BASE}/api/gps/search?q=${encodeURIComponent(courseName)}&state=${encodeURIComponent(roundState)}&country=AU`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
     }
+  );
 
+  const searchText = await searchResponse.text();
 
-    if (
-      !searchResponse.ok ||
-      !searchData?.ok
-    ) {
+  let searchData = null;
 
-      throw new Error(
-        searchData?.error ||
-        `GPS search HTTP ${searchResponse.status}`
-      );
-    }
+  try {
+    searchData = JSON.parse(searchText);
+  } catch (error) {
+    console.warn(
+      "⚠️ Could not parse GPS search response:",
+      searchText
+    );
+  }
 
+  if (!searchResponse.ok || !searchData?.ok) {
+    throw new Error(
+      searchData?.error ||
+      `GPS search HTTP ${searchResponse.status}`
+    );
+  }
 
-    const courses =
-      Array.isArray(
-        searchData.courses
-      )
-        ? searchData.courses
-        : [];
+  courses = Array.isArray(searchData.courses)
+    ? searchData.courses
+    : [];
 
+  if (!courses.length) {
+    console.log("ℹ️ No GolfAPI.io match:", courseName);
 
-    if (!courses.length) {
+    providerGpsLoadedForRoundId = null;
 
-      console.log(
-        "ℹ️ No GolfAPI.io match:",
-        courseName
-      );
+    updateGpsDistances();
+    updateGpsGreenMarker();
 
-      /*
-       * Do not mark this round as successfully loaded.
-       * This allows another attempt later.
-       */
-      providerGpsLoadedForRoundId =
-        null;
-
-      updateGpsDistances();
-      updateGpsGreenMarker();
-
-      return;
-    }
+    return;
+  }
+}
 
 
     // =====================================================
@@ -11643,8 +11636,7 @@ function setLeftPanelsVisibility(show){
         roundState
       );
 
-    let match =
-      null;
+    let match = directProviderId ? courses[0] : null;
 
 
     // -----------------------------------------------------
