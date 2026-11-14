@@ -14,6 +14,59 @@ import { Resend } from "resend";
 
 const router = express.Router();
 router.use(express.json());
+// -------------------------------------------------
+// TeeRadar — Standardise club names
+// -------------------------------------------------
+function normaliseClubName(value) {
+  if (value == null) return null;
+
+  const club = String(value).trim();
+  if (!club) return null;
+
+  const key = club.toLowerCase().replace(/\s+/g, "");
+
+  const clubNames = {
+    dr: "Driver",
+    driver: "Driver",
+
+    pw: "Pitching Wedge",
+    pitchingwedge: "Pitching Wedge",
+
+    gw: "Gap Wedge",
+    gapwedge: "Gap Wedge",
+
+    sw: "Sand Wedge",
+    sandwedge: "Sand Wedge",
+
+    lw: "Lob Wedge",
+    lobwedge: "Lob Wedge",
+
+    pt: "Putter",
+    putter: "Putter"
+  };
+
+  if (clubNames[key]) {
+    return clubNames[key];
+  }
+
+  // Woods: 3W -> 3 Wood
+  const wood = key.match(/^(\d+)(w|wood)$/);
+  if (wood) return `${wood[1]} Wood`;
+
+  // Irons: 7i -> 7 Iron
+  const iron = key.match(/^(\d+)(i|iron)$/);
+  if (iron) return `${iron[1]} Iron`;
+
+  // Hybrids: 4H -> 4 Hybrid
+  const hybrid = key.match(/^(\d+)(h|hybrid)$/);
+  if (hybrid) return `${hybrid[1]} Hybrid`;
+
+  // Degree wedges: 56° -> 56° Wedge
+  const wedge = key.match(/^(\d{2})(°|deg|°wedge|degreewedge)$/);
+  if (wedge) return `${wedge[1]}° Wedge`;
+
+  return club;
+}
 
 
 // -------------------------------------------------
@@ -2961,10 +3014,7 @@ router.post("/:id/shots", requireAuth, async (req, res) => {
       });
     }
 
-    const club = req.body?.club == null ||
-      String(req.body.club).trim() === ""
-        ? null
-        : String(req.body.club).trim();
+    const club = normaliseClubName(req.body?.club);
 
     if (club && club.length > 60) {
       return res.status(400).json({
@@ -3070,8 +3120,8 @@ router.get("/stats/club-shots", requireAuth, async (req, res) => {
     let longestShot = 0;
 
     for (const shot of result.rows) {
-      const club = String(shot.club || "").trim();
-      if (!club) continue;
+  const club = normaliseClubName(shot.club);
+  if (!club) continue;
 
       totalShots++;
 
@@ -3462,10 +3512,9 @@ router.patch("/:id/shots/:shotId", requireAuth, async (req, res) => {
     const longitude = body.longitude === undefined
       ? existing.longitude : Number(body.longitude);
 
-    const club = body.club === undefined
-      ? existing.club
-      : body.club == null || String(body.club).trim() === ""
-        ? null : String(body.club).trim();
+    const club = normaliseClubName(
+  body.club === undefined ? existing.club : body.club
+);
 
     if (
       !Number.isFinite(latitude) ||
