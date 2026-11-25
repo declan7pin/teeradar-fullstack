@@ -1576,23 +1576,50 @@ html.round-mode #gpsMapShotActions {
   overscroll-behavior:contain;
 }
 
-.courseOptionCard{
-  padding:16px 18px;
-  border-bottom:1px solid var(--border);
-  background:#fff;
-  cursor:pointer;
+
+.courseOptionCard {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.courseOptionCard:hover{
-  background:#f4fbf9;
+.courseOptionCard:last-child {
+  border-bottom: none;
 }
 
-.courseOptionTitle{
-  font-size:1rem;
-  font-weight:1000;
-  letter-spacing:-.03em;
-  color:var(--text);
+.courseOptionCard:hover {
+  background: #edf8f5;
 }
+
+.courseOptionTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  color: #142d29;
+  margin-bottom: 5px;
+}
+
+.courseOptionMeta {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.courseOptionRating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.courseOptionRating:empty {
+  display: none;
+}
+
 
 .courseOptionMeta{
   margin-top:4px;
@@ -3265,7 +3292,7 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 
           <label for="course">Course</label>
           <div id="courseRow">
-            <input id="course" placeholder="e.g. Collier Park Golf Course" />
+            <input id="course" placeholder="Select your state first, then search for a course" />
             <div id="courseAutoList" class="autocomplete-list" style="display:none;"></div>
           </div>
 
@@ -5116,6 +5143,9 @@ let backendHandicap = null;
     let coursesCache = [];
     let coursesLoaded = false;
     let selectedCourseKey = "";
+    // GolfAPI course ID selected when creating a round.
+// Keep as a string to preserve large provider IDs.
+let selectedGolfApiCourseId = null;
 
     // scorecards cache
     const scorecardsByState = new Map(); // st -> array
@@ -11523,88 +11553,81 @@ function setLeftPanelsVisibility(show){
       }
     );
 
+    // Exact GolfAPI ID for The Grange West Course.
+// Preserve existing lookup behaviour for all other courses.
+const directProviderId =
+  roundState.toUpperCase() === "SA" &&
+  /\bthe grange golf club\b/i.test(rawCourseName) &&
+  /\bwest course\b/i.test(rawCourseName)
+    ? "0121325752402791904"
+    : null;
+
 
     // =====================================================
     // 1. SEARCH PROVIDER COURSE
     // =====================================================
 
-    const searchResponse =
-      await fetch(
-        `${API_BASE}/api/gps/search?q=${encodeURIComponent(
-          courseName
-        )}&state=${encodeURIComponent(
-          roundState
-        )}&country=AU`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      );
+   let courses = [];
 
+if (directProviderId) {
+  console.log(
+    "✅ TeeRadar using exact GolfAPI course ID:",
+    directProviderId
+  );
 
-    const searchText =
-      await searchResponse.text();
+  courses = [{
+    id: directProviderId,
+    name: "The Grange Golf Club",
+    club: "The Grange Golf Club",
+    course: "West Course",
+    state: stateNameForGolfApi(roundState)
+  }];
 
-    let searchData = null;
-
-
-    try {
-
-      searchData =
-        JSON.parse(
-          searchText
-        );
-
-    } catch (error) {
-
-      console.warn(
-        "⚠️ Could not parse GPS search response:",
-        searchText
-      );
+} else {
+  const searchResponse = await fetch(
+    `${API_BASE}/api/gps/search?q=${encodeURIComponent(courseName)}&state=${encodeURIComponent(roundState)}&country=AU`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
     }
+  );
 
+  const searchText = await searchResponse.text();
 
-    if (
-      !searchResponse.ok ||
-      !searchData?.ok
-    ) {
+  let searchData = null;
 
-      throw new Error(
-        searchData?.error ||
-        `GPS search HTTP ${searchResponse.status}`
-      );
-    }
+  try {
+    searchData = JSON.parse(searchText);
+  } catch (error) {
+    console.warn(
+      "⚠️ Could not parse GPS search response:",
+      searchText
+    );
+  }
 
+  if (!searchResponse.ok || !searchData?.ok) {
+    throw new Error(
+      searchData?.error ||
+      `GPS search HTTP ${searchResponse.status}`
+    );
+  }
 
-    const courses =
-      Array.isArray(
-        searchData.courses
-      )
-        ? searchData.courses
-        : [];
+  courses = Array.isArray(searchData.courses)
+    ? searchData.courses
+    : [];
 
+  if (!courses.length) {
+    console.log("ℹ️ No GolfAPI.io match:", courseName);
 
-    if (!courses.length) {
+    providerGpsLoadedForRoundId = null;
 
-      console.log(
-        "ℹ️ No GolfAPI.io match:",
-        courseName
-      );
+    updateGpsDistances();
+    updateGpsGreenMarker();
 
-      /*
-       * Do not mark this round as successfully loaded.
-       * This allows another attempt later.
-       */
-      providerGpsLoadedForRoundId =
-        null;
-
-      updateGpsDistances();
-      updateGpsGreenMarker();
-
-      return;
-    }
+    return;
+  }
+}
 
 
     // =====================================================
@@ -11616,8 +11639,7 @@ function setLeftPanelsVisibility(show){
         roundState
       );
 
-    let match =
-      null;
+    let match = directProviderId ? courses[0] : null;
 
 
     // -----------------------------------------------------
@@ -12659,11 +12681,45 @@ function showCourseAutocomplete(items){
     const div = document.createElement("div");
     div.className = "courseOptionCard";
 
-    const baseName =
-      c.name ||
-      c.course ||
-      c.title ||
-      "";
+    const isGolfApi =
+  c?._golfapi_result === true;
+
+const clubName =
+  String(
+    c.club ||
+    c.clubName ||
+    ""
+  ).trim();
+
+const layoutName =
+  String(
+    c.course ||
+    c.courseName ||
+    ""
+  ).trim();
+
+const baseName =
+  isGolfApi
+    ? (
+        clubName ||
+        layoutName ||
+        c.name ||
+        ""
+      )
+    : (
+        c.name ||
+        c.course ||
+        c.title ||
+        ""
+      );
+
+const displayName =
+  isGolfApi &&
+  layoutName &&
+  layoutName.toLowerCase() !==
+    baseName.toLowerCase()
+    ? `${baseName} — ${layoutName}`
+    : baseName;
 
     const st =
       String(c.state || "")
@@ -12686,7 +12742,7 @@ function showCourseAutocomplete(items){
 
     div.innerHTML = `
       <div class="courseOptionTitle">
-        ${escapeHtml(baseName)}${h ? ` (${h} holes)` : ""}
+        ${escapeHtml(displayName)}${h ? ` (${h} holes)` : ""}
       </div>
 
       <div class="courseOptionMeta">
@@ -12804,6 +12860,19 @@ function showCourseAutocomplete(items){
             return;
           }
         }
+                // Remember the exact GolfAPI course ID.
+        // Courses without an ID continue using existing lookup.
+        selectedGolfApiCourseId =
+          c?._golfapi_result === true &&
+          c?.provider_course_id
+            ? String(c.provider_course_id).trim()
+            : null;
+
+        console.log(
+          "⛳ Selected GolfAPI course ID:",
+          selectedGolfApiCourseId
+        );
+
         courseEl.value =
           baseName;
 
@@ -13175,159 +13244,159 @@ showCourseAutocomplete([
   }
 }
     
-    async function initCourseAutocomplete(){
+   
+async function initCourseAutocomplete() {
   if (!courseEl || !courseAutoList) return;
 
-  courseEl.addEventListener(
-    "input",
-    async () => {
-      const q =
-        norm(
-          courseEl.value
+  let searchTimer = null;
+  let searchSequence = 0;
+
+  courseEl.addEventListener("input", () => {
+    const query = courseEl.value.trim();
+    const q = norm(query);
+    const sequence = ++searchSequence;
+
+    selectedCourseKey = "";
+
+    clearTimeout(searchTimer);
+
+    courseAutoList.style.display = "none";
+    courseAutoList.innerHTML = "";
+
+    if (q.length < 2) return;
+
+    searchTimer = setTimeout(async () => {
+      try {
+        await loadCoursesOnce();
+
+        if (sequence !== searchSequence) return;
+
+        const stateNow = String(
+          stateEl?.value || ""
+        ).trim().toUpperCase();
+
+        // Existing TeeRadar courses
+        const localMatches = coursesCache
+  .filter(c => {
+    const courseState = String(
+      c.state || ""
+    ).trim().toUpperCase();
+
+    const courseName = norm(
+      c.name ||
+      c.course ||
+      c.title ||
+      ""
+    );
+
+    return (
+      courseState === stateNow &&
+      courseName.includes(q)
+    );
+  })
+          .sort((a, b) => {
+            const aBoost =
+              String(a.state || "").toUpperCase() === stateNow
+                ? 0
+                : 1;
+
+            const bBoost =
+              String(b.state || "").toUpperCase() === stateNow
+                ? 0
+                : 1;
+
+            return (
+              aBoost - bBoost ||
+              norm(a.name || "").localeCompare(
+                norm(b.name || "")
+              )
+            );
+          })
+          .slice(0, 10);
+
+        // Search TeeRadar's own worldwide directory.
+        // This does NOT perform a paid GolfAPI search.
+        const result = await api(
+          `/api/gps/search?q=${encodeURIComponent(query)}&country=AU&state=${encodeURIComponent(stateNow)}`,
+          { method: "GET" }
         );
 
-      selectedCourseKey = "";
+        if (sequence !== searchSequence) return;
 
-      courseAutoList.style.display =
-        "none";
+        const directoryCourses = Array.isArray(result?.courses)
+          ? result.courses
+          : [];
 
-      courseAutoList.innerHTML =
-        "";
+        const directoryMatches = directoryCourses.map(c => ({
+          name: golfApiCourseDisplayName(c),
+          club: c.club || c.clubName || "",
+          course: c.course || c.courseName || "",
+          state: String(c.state || "").trim(),
+          country: String(c.country || "").trim(),
+          holes: Number(c.numHoles ?? c.holes) || null,
+          provider_course_id: String(
+            c.provider_course_id || c.courseID || c.id || ""
+          ).trim(),
+          _golfapi_result: true,
+          _golfapi_original: c
+        }));
 
-      if (
-        !q ||
-        q.length < 2
-      ) {
-        return;
+        // Avoid showing the same GolfAPI course twice.
+        const seenProviderIds = new Set();
+
+        const uniqueDirectoryMatches = directoryMatches.filter(c => {
+          if (!c.provider_course_id) return false;
+
+          if (seenProviderIds.has(c.provider_course_id)) {
+            return false;
+          }
+
+          seenProviderIds.add(c.provider_course_id);
+          return true;
+        });
+
+        // Show local courses first, followed by directory results.
+        showCourseAutocomplete([
+          ...localMatches,
+          ...uniqueDirectoryMatches
+        ]);
+
+      } catch (error) {
+        if (sequence !== searchSequence) return;
+
+        console.error(
+          "Course autocomplete search failed:",
+          error
+        );
       }
+    }, 300);
+  });
 
-      await loadCoursesOnce();
+  // Enter remains available as a manual search option.
+  courseEl.addEventListener("keydown", async event => {
+    if (event.key !== "Enter") return;
 
-      const stateNow =
-        (
-          stateEl?.value || ""
-        )
-          .trim()
-          .toUpperCase();
+    event.preventDefault();
 
-      const matches =
-        coursesCache
-          .filter(
-            c =>
-              norm(
-                c.name ||
-                c.course ||
-                c.title
-              ).includes(q)
-          )
-          .sort(
-            (a,b) => {
-              const aState =
-                String(
-                  a.state || ""
-                ).toUpperCase();
+    clearTimeout(searchTimer);
+    ++searchSequence;
 
-              const bState =
-                String(
-                  b.state || ""
-                ).toUpperCase();
+    await searchGolfApiCourseFromEnter();
+  });
 
-              const aBoost =
-                (
-                  stateNow &&
-                  aState === stateNow
-                )
-                  ? -1
-                  : 0;
-
-              const bBoost =
-                (
-                  stateNow &&
-                  bState === stateNow
-                )
-                  ? -1
-                  : 0;
-
-              if (
-                aBoost !== bBoost
-              ) {
-                return (
-                  aBoost -
-                  bBoost
-                );
-              }
-
-              return norm(
-                a.name
-              ).localeCompare(
-                norm(b.name)
-              );
-            }
-          )
-          .slice(
-            0,
-            10
-          );
-
-      showCourseAutocomplete(
-        matches
-      );
+  document.addEventListener("click", e => {
+    if (
+      e.target === courseEl ||
+      courseAutoList.contains(e.target)
+    ) {
+      return;
     }
-  );
 
-    // -------------------------------------------------------
-  // ENTER = SEARCH FOR A NEW COURSE
-  //
-  // Typing never calls GolfAPI.
-  // GolfAPI is only allowed after an intentional Enter.
-  // -------------------------------------------------------
-
-  courseEl.addEventListener(
-    "keydown",
-    async (event) => {
-
-      if (
-        event.key !==
-        "Enter"
-      ) {
-        return;
-      }
-
-      /*
-       * Prevent Enter accidentally triggering any other
-       * form/button behaviour.
-       */
-      event.preventDefault();
-
-      await searchGolfApiCourseFromEnter();
-    }
-  );
-      
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (
-        e.target === courseEl
-      ) {
-        return;
-      }
-
-      if (
-        courseAutoList.contains(
-          e.target
-        )
-      ) {
-        return;
-      }
-
-      courseAutoList.style.display =
-        "none";
-
-      courseAutoList.innerHTML =
-        "";
-    }
-  );
+    courseAutoList.style.display = "none";
+    courseAutoList.innerHTML = "";
+  });
 }
+
 
     function syncNineLoopVisibility(){
       const holesNow = Number(holesEl?.value || 18);
@@ -18420,6 +18489,11 @@ async function createRound(){
     course,
     state,
     holes,
+
+    provider_course_id:
+  selectedGolfApiCourseId
+    ? String(selectedGolfApiCourseId).trim()
+    : null,
 
     layout:
       layout || null,
