@@ -15422,13 +15422,42 @@ if (playHolePar) {
   playHolePar.textContent =
     Number.isFinite(basePar) ? String(basePar) : "—";
 }
-
 if (playRoundScore) {
   const rows = readTableHoles();
 
+  // Identify the golfer logged into this phone.
+  const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+  const loggedInUserId = Number(
+    tokenPayload.id ??
+    tokenPayload.userId ??
+    tokenPayload.user_id ??
+    tokenPayload.sub
+  );
+
+  let playerUserIds = round?.player_user_ids || [];
+
+  if (typeof playerUserIds === "string") {
+    try {
+      playerUserIds = JSON.parse(playerUserIds);
+    } catch (_) {
+      playerUserIds = [];
+    }
+  }
+
+  const matchedPlayerIndex = Array.isArray(playerUserIds)
+    ? playerUserIds.findIndex(
+        id => Number(id) === loggedInUserId
+      )
+    : -1;
+
+  const gpsPlayerIndex = matchedPlayerIndex >= 0
+    ? matchedPlayerIndex
+    : premiumPlayerIndex;
+
   const totals = calcTotalsForPlayer(
     rows,
-    premiumPlayerIndex
+    gpsPlayerIndex
   );
 
   const toPar = totals.toPar;
