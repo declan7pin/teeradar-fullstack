@@ -4402,10 +4402,38 @@ function buildTeeRadarLiveActivityPayload() {
 
   const par = Number(currentHole?.par);
 
-  const viewerPlayerIndex = Math.max(
-    0,
-    (Number(currentRound.player_number) || 1) - 1
-  );
+  // Identify the logged-in golfer's player position.
+const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+const loggedInUserId = Number(
+  tokenPayload.id ??
+  tokenPayload.userId ??
+  tokenPayload.user_id ??
+  tokenPayload.sub
+);
+
+let playerUserIds = currentRound?.player_user_ids || [];
+
+if (typeof playerUserIds === "string") {
+  try {
+    playerUserIds = JSON.parse(playerUserIds);
+  } catch (_) {
+    playerUserIds = [];
+  }
+}
+
+const matchedPlayerIndex = Array.isArray(playerUserIds)
+  ? playerUserIds.findIndex(
+      id => Number(id) === loggedInUserId
+    )
+  : -1;
+
+const viewerPlayerIndex = matchedPlayerIndex >= 0
+  ? matchedPlayerIndex
+  : Math.max(
+      0,
+      (Number(currentRound.player_number) || 1) - 1
+    );
 
   const rawHoleScore = currentHole
     ? getHolePlayerValue(
@@ -4961,10 +4989,39 @@ async function syncTeeRadarLiveActivity() {
     backDistance: payload.backDistance,
     holeScore: payload.holeScore,
     totalScoreToPar: payload.totalScoreToPar,
-    playerNumber: Math.max(
-      1,
-      Number(currentRound?.player_number) || 1
-    )
+    playerNumber: (() => {
+  const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+  const loggedInUserId = Number(
+    tokenPayload.id ??
+    tokenPayload.userId ??
+    tokenPayload.user_id ??
+    tokenPayload.sub
+  );
+
+  let playerUserIds = currentRound?.player_user_ids || [];
+
+  if (typeof playerUserIds === "string") {
+    try {
+      playerUserIds = JSON.parse(playerUserIds);
+    } catch (_) {
+      playerUserIds = [];
+    }
+  }
+
+  const playerIndex = Array.isArray(playerUserIds)
+    ? playerUserIds.findIndex(
+        id => Number(id) === loggedInUserId
+      )
+    : -1;
+
+  return playerIndex >= 0
+    ? playerIndex + 1
+    : Math.max(
+        1,
+        Number(currentRound?.player_number) || 1
+      );
+})()
   };
 
   // Identify important changes independently of GPS distances.
