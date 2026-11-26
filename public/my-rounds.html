@@ -5612,7 +5612,8 @@ let liveScoreSyncBusy = false;
  *
  * Live polling must not redraw the controls during this.
  */
-let premiumScoreEditBusy = false;
+let premiumScoreEditBusy = 0;
+let premiumScoreEditVersion = 0;
 
 /*
  * True only while we are initially opening/resuming
@@ -15152,6 +15153,9 @@ async function syncCurrentRoundLive() {
   }
 
   liveScoreSyncBusy = true;
+
+const scoreEditVersionAtStart =
+  premiumScoreEditVersion;
 console.log("🔄 LIVE SCORE SYNC RUNNING", {
   roundId: currentRoundId,
   time: new Date().toISOString()
@@ -15179,12 +15183,15 @@ console.log("🔄 LIVE SCORE SYNC RUNNING", {
      * If that happened, this response may contain the OLD
      * score and must not overwrite the golfer's new local edit.
      */
-    if (premiumScoreEditBusy) {
-      console.log(
-        "⏭️ Ignoring stale live-sync response during score edit"
-      );
-      return;
-    }
+    if (
+  premiumScoreEditBusy ||
+  premiumScoreEditVersion !== scoreEditVersionAtStart
+) {
+  console.log(
+    "⏭️ Ignoring stale live-sync response during score edit"
+  );
+  return;
+}
 
     /*
      * User may have opened another round while the
@@ -15658,7 +15665,8 @@ if (premScoreBtns) {
     const playerNumber =
       premiumPlayerIndex + 1;
 
-    premiumScoreEditBusy = true;
+    premiumScoreEditBusy += 1;
+premiumScoreEditVersion += 1;
 
     try {
       /*
@@ -15759,7 +15767,10 @@ if (premScoreBtns) {
       );
 
     } finally {
-      premiumScoreEditBusy = false;
+      premiumScoreEditBusy = Math.max(
+  0,
+  premiumScoreEditBusy - 1
+);
     }
   }
 );
@@ -15883,7 +15894,8 @@ if (premPuttBtns) {
     const playerNumber =
       premiumPlayerIndex + 1;
 
-    premiumScoreEditBusy = true;
+    premiumScoreEditBusy += 1;
+premiumScoreEditVersion += 1;
 
     try {
       /*
@@ -16099,7 +16111,10 @@ const loggedInUserId = Number(
       );
 
     } finally {
-      premiumScoreEditBusy = false;
+      premiumScoreEditBusy = Math.max(
+  0,
+  premiumScoreEditBusy - 1
+);
     }
   }
 );
@@ -16265,6 +16280,82 @@ premiumShowingTable = false;
       getPlayersCountFromRound(round);
 
     /*
+ * Save the selected player's displayed score
+ * before moving to another player or hole.
+ *
+ * Read directly from the visible selectors,
+ * as live polling may have changed the hidden table.
+ */
+if (isLoggedIn()) {
+  const playerNumber = premiumPlayerIndex + 1;
+  const holeNumber = premiumHoleIndex + 1;
+
+  const strokesWheel =
+    premScoreBtns?.querySelector("select");
+
+  const puttsWheel =
+    premPuttBtns?.querySelector("select");
+
+  const strokesRaw = strokesWheel?.value ?? "";
+  const puttsRaw = puttsWheel?.value ?? "";
+
+  const scorePayload = {};
+
+  if (
+    strokesRaw !== "" &&
+    Number.isFinite(Number(strokesRaw))
+  ) {
+    scorePayload.strokes = Number(strokesRaw);
+  }
+
+  if (
+    puttsRaw !== "" &&
+    Number.isFinite(Number(puttsRaw))
+  ) {
+    scorePayload.putts = Number(puttsRaw);
+  }
+
+  premiumScoreEditBusy += 1;
+premiumScoreEditVersion += 1;
+  premNextBtn.disabled = true;
+
+  try {
+    if (Object.keys(scorePayload).length > 0) {
+      await savePremiumPlayerScore(
+        holeNumber,
+        playerNumber,
+        scorePayload
+      );
+
+      for (const [field, value] of Object.entries(scorePayload)) {
+        setHoleValueInTable(
+          holeNumber,
+          field,
+          playerNumber,
+          value
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Player score save failed:", error);
+
+    setToast(
+      rightToast,
+      "Could not save score. Please try again.",
+      false
+    );
+
+    return;
+  } finally {
+    premiumScoreEditBusy = Math.max(
+  0,
+  premiumScoreEditBusy - 1
+);
+    premNextBtn.disabled = false;
+  }
+}
+
+    /*
      * If there are multiple players, move through each
      * player before completing the hole.
      */
@@ -16300,12 +16391,16 @@ premiumShowingTable = false;
       try {
         await playScoreHaptic("medium");
 
-        await saveCurrentHoleCollaboratively(
-  premiumHoleIndex + 1,
-  {
-    silent: true
-  }
-);
+       // Guest rounds still require the existing local save.
+// Logged-in players are saved individually before navigation.
+if (!isLoggedIn()) {
+  await saveCurrentHoleCollaboratively(
+    premiumHoleIndex + 1,
+    {
+      silent: true
+    }
+  );
+}
 
 await loadRound(
   currentRoundId
@@ -16346,12 +16441,16 @@ premNextBtn.textContent = "Round saved";
     premNextBtn.textContent = "Saving…";
 
     try {
-      await saveCurrentHoleCollaboratively(
-  premiumHoleIndex + 1,
-  {
-    silent: true
-  }
-);
+     // Guest rounds still require the existing local save.
+// Logged-in players are saved individually before navigation.
+if (!isLoggedIn()) {
+  await saveCurrentHoleCollaboratively(
+    premiumHoleIndex + 1,
+    {
+      silent: true
+    }
+  );
+}
 
       await playScoreHaptic("light");
 
@@ -17222,6 +17321,27 @@ async function saveCurrentHoleCollaboratively(
         ? null
         : Number(puttsRaw);
 
+        // Do not submit empty scores over another
+    // golfer's existing saved scores.
+    const scorePayload = {
+      player_number: playerNumber
+    };
+
+    if (Number.isFinite(strokes)) {
+      scorePayload.strokes = strokes;
+    }
+
+    if (Number.isFinite(putts)) {
+      scorePayload.putts = putts;
+    }
+
+    if (
+      !Number.isFinite(strokes) &&
+      !Number.isFinite(putts)
+    ) {
+      continue;
+    }
+
     await api(
       `/api/rounds/${encodeURIComponent(
         currentRoundId
@@ -17231,19 +17351,8 @@ async function saveCurrentHoleCollaboratively(
       {
         method: "PUT",
 
-        body: JSON.stringify({
-          player_number:
-            playerNumber,
-
-          strokes:
-            Number.isFinite(strokes)
-              ? strokes
-              : null,
-
-          putts:
-            Number.isFinite(putts)
-              ? putts
-              : null,
+                body: JSON.stringify({
+          ...scorePayload,
 
           par:
             Number.isFinite(
