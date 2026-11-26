@@ -15195,6 +15195,18 @@ console.log("🔄 LIVE SCORE SYNC RUNNING", {
       Array.isArray(freshHoles)
         ? freshHoles
         : [];
+    console.log(
+  "📥 LIVE SCORE DATA RECEIVED",
+  {
+    roundId: roundIdAtStart,
+    players: freshRound.player_user_ids,
+    holes: freshRound.holesData.map(h => ({
+      hole: h.hole_number,
+      strokes: h.strokes_by_player,
+      putts: h.putts_by_player
+    }))
+  }
+);
 
     /*
      * Preserve the CURRENT viewed hole/player.
