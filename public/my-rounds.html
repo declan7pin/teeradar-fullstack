@@ -15066,6 +15066,21 @@ function applyLiveScoreDataToTable(freshRound) {
         scoreBody.querySelector(
           `input[data-field="putts"][data-hole="${holeNumber}"][data-player="${playerNumber}"]`
         );
+      if (holeNumber === 1 && playerNumber === 2) {
+  console.log("🔍 LIVE SCORE TABLE CHECK", {
+    holeNumber,
+    playerNumber,
+    playersCount,
+    strokes,
+    putts,
+    strokesInputFound: !!strokesInput,
+    puttsInputFound: !!puttsInput,
+    currentStrokes: strokesInput?.value,
+    currentPutts: puttsInput?.value,
+    strokesInputActive: document.activeElement === strokesInput,
+    puttsInputActive: document.activeElement === puttsInput
+  });
+}
 
       /*
        * Do NOT overwrite an input the golfer is actively
