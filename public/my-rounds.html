@@ -15235,20 +15235,12 @@ async function syncCurrentRoundLive() {
       showingTable;
 
     /*
-     * Refresh only the currently visible premium UI.
-     * This does NOT move holes.
-     */
-    if (
-      premiumWrap &&
-      premiumWrap.style.display !== "none"
-    ) {
-      renderPremiumForHole(
-        currentRound,
-        currentPremiumPars,
-        currentPremiumDistances,
-        currentPremiumTeeName
-      );
-    }
+ * Shared scorecard values have already been updated
+ * by applyLiveScoreDataToTable().
+ *
+ * Do NOT rebuild the premium scoring controls
+ * during background synchronisation.
+ */
 
   } catch (error) {
     /*
@@ -15269,21 +15261,23 @@ async function syncCurrentRoundLive() {
 // ✅ Start / stop live shared score polling
 // ---------------------------------------------------------
 function startLiveScoreSync() {
-  /*
-   * TEMP TEST:
-   *
-   * Completely disable live polling.
-   *
-   * We have now proven that something outside the
-   * Strokes / Putts change handlers is rebuilding
-   * the premium controls.
-   *
-   * Do NOT start the 2-second timer during this test.
-   */
-  stopLiveScoreSync();
+  // Prevent duplicate polling timers.
+  if (liveScoreSyncTimer) {
+    return;
+  }
+
+  if (!isLoggedIn() || !currentRoundId) {
+    return;
+  }
+
+  // Refresh shared scores every 2 seconds.
+  liveScoreSyncTimer = setInterval(
+    syncCurrentRoundLive,
+    2000
+  );
 
   console.log(
-    "🛑 Live score polling temporarily disabled"
+    "✅ Live shared score polling enabled"
   );
 }
 function stopLiveScoreSync() {
@@ -16404,6 +16398,45 @@ function formatToParOnly(v){
   if (n === 0) return "E";
   return n > 0 ? `+${n}` : `${n}`;
 }
+    // Identify the player belonging to the logged-in account.
+function getLoggedInRoundPlayerIndex(round = currentRound) {
+  const tokenPayload = decodeJwtPayload(getToken()) || {};
+
+  const loggedInUserId = Number(
+    tokenPayload.id ??
+    tokenPayload.userId ??
+    tokenPayload.user_id ??
+    tokenPayload.sub
+  );
+
+  let playerUserIds = round?.player_user_ids || [];
+
+  if (typeof playerUserIds === "string") {
+    try {
+      playerUserIds = JSON.parse(playerUserIds);
+    } catch (_) {
+      playerUserIds = [];
+    }
+  }
+
+  const matchedPlayerIndex =
+    Array.isArray(playerUserIds) &&
+    Number.isInteger(loggedInUserId) &&
+    loggedInUserId > 0
+      ? playerUserIds.findIndex(
+          id => Number(id) === loggedInUserId
+        )
+      : -1;
+
+  if (matchedPlayerIndex >= 0) {
+    return matchedPlayerIndex;
+  }
+
+  return Math.max(
+    0,
+    (Number(round?.player_number) || 1) - 1
+  );
+}
 
 function renderLiveScoreHero(
   savedMode = false
@@ -16433,16 +16466,11 @@ function renderLiveScoreHero(
    * P3 -> 3
    * P4 -> 4
    */
-  const viewerPlayerNumber =
-    Math.max(
-      1,
-      Number(
-        currentRound?.player_number
-      ) || 1
-    );
-
   const viewerPlayerIndex =
-    viewerPlayerNumber - 1;
+  getLoggedInRoundPlayerIndex(currentRound);
+
+const viewerPlayerNumber =
+  viewerPlayerIndex + 1;
 
   /*
    * Show THIS golfer's score,
@@ -17262,16 +17290,8 @@ async function saveCurrentHoleCollaboratively(
    *
    * Normal/older rounds fall back to Player 1.
    */
-  const viewerPlayerNumber =
-    Math.max(
-      1,
-      Number(
-        currentRound?.player_number
-      ) || 1
-    );
-
   const viewerPlayerIndex =
-    viewerPlayerNumber - 1;
+  getLoggedInRoundPlayerIndex(currentRound);
 
   for (
     let pi = 0;
@@ -17328,9 +17348,19 @@ async function saveCurrentHoleCollaboratively(
       currentRoundId
     ) {
       setCachedRoundScore(
-        currentRoundId,
-        totals
-      );
+  currentRoundId,
+  totals
+);
+
+// Update the GPS Round Score without rebuilding
+// the scoring controls or refreshing the GPS map.
+const playRoundScore =
+  document.getElementById("playRoundScore");
+
+if (playRoundScore) {
+  playRoundScore.textContent =
+    formatToParOnly(totals.toPar);
+}
     }
 
     const toParLabel =
@@ -18347,11 +18377,13 @@ if (roundModeExitBtn) {
     shouldAutoOpenCurrentHole =
     !hasRequestedHole;
 
-  await renderScorecard(
+    await renderScorecard(
     round
   );
-}
 
+  // Start live shared scorecard synchronisation.
+  startLiveScoreSync();
+}
 async function createRound(){
   const course = String(courseEl.value || "").trim();
   const state = String(stateEl.value || "WA").trim().toUpperCase();
@@ -19543,13 +19575,12 @@ function stopRoundsLiveRefresh() {
     if (
       document.visibilityState === "visible"
     ) {
-      /*
-       * Refresh rounds only.
-       *
-       * Do not touch the open scorecard when
-       * an iOS picker opens/closes.
-       */
       refreshRoundsInBackground();
+
+      // Resume live score polling if a round is open.
+      if (isLoggedIn() && currentRoundId) {
+        startLiveScoreSync();
+      }
     } else {
       stopLiveScoreSync();
     }
