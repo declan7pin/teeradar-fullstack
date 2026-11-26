@@ -15137,7 +15137,11 @@ async function syncCurrentRoundLive() {
   }
 
   liveScoreSyncBusy = true;
-
+console.log("🔄 LIVE SCORE SYNC RUNNING", {
+  roundId: currentRoundId,
+  time: new Date().toISOString()
+});
+  
   try {
     const roundIdAtStart =
       String(currentRoundId);
