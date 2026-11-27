@@ -5615,6 +5615,9 @@ let liveScoreSyncBusy = false;
 let premiumScoreEditBusy = 0;
 let premiumScoreEditVersion = 0;
 
+// Retain failed score submissions for retry.
+const premiumFailedScoreSaves = new Map();
+
 /*
  * True only while we are initially opening/resuming
  * a round.
@@ -15662,10 +15665,13 @@ if (premScoreBtns) {
     const v =
       Number(sel.value);
 
-    const playerNumber =
-      premiumPlayerIndex + 1;
+   const playerNumber =
+  premiumPlayerIndex + 1;
 
-    premiumScoreEditBusy += 1;
+const scoreSaveKey =
+  `${currentRoundId}:${holeNum}:${playerNumber}:strokes`;
+
+premiumScoreEditBusy += 1;
 premiumScoreEditVersion += 1;
 
     try {
@@ -15688,13 +15694,31 @@ premiumScoreEditVersion += 1;
       /*
        * Save ONLY this player on this hole.
        */
-      await savePremiumPlayerScore(
-  holeNum,
-  playerNumber,
-  {
-    strokes: v
-  }
-);
+      try {
+  await savePremiumPlayerScore(
+    holeNum,
+    playerNumber,
+    {
+      strokes: v
+    }
+  );
+
+  premiumFailedScoreSaves.delete(scoreSaveKey);
+
+} catch (saveError) {
+  premiumFailedScoreSaves.set(
+    scoreSaveKey,
+    {
+      roundId: currentRoundId,
+      holeNumber: holeNum,
+      playerNumber,
+      field: "strokes",
+      value: v
+    }
+  );
+
+  throw saveError;
+}
 
       /*
        * Keep this phone's in-memory copy current.
@@ -15892,9 +15916,12 @@ if (premPuttBtns) {
         : Number(raw);
 
     const playerNumber =
-      premiumPlayerIndex + 1;
+  premiumPlayerIndex + 1;
 
-    premiumScoreEditBusy += 1;
+const scoreSaveKey =
+  `${currentRoundId}:${holeNum}:${playerNumber}:putts`;
+
+premiumScoreEditBusy += 1;
 premiumScoreEditVersion += 1;
 
     try {
@@ -15917,13 +15944,31 @@ premiumScoreEditVersion += 1;
       /*
        * Save ONLY this player on this hole.
        */
-            await savePremiumPlayerScore(
-        holeNum,
-        playerNumber,
-        {
-          putts: v
-        }
-      );
+           try {
+  await savePremiumPlayerScore(
+    holeNum,
+    playerNumber,
+    {
+      putts: v
+    }
+  );
+
+  premiumFailedScoreSaves.delete(scoreSaveKey);
+
+} catch (saveError) {
+  premiumFailedScoreSaves.set(
+    scoreSaveKey,
+    {
+      roundId: currentRoundId,
+      holeNumber: holeNum,
+      playerNumber,
+      field: "putts",
+      value: v
+    }
+  );
+
+  throw saveError;
+}
 
       // ---------------------------------------------------------
       // TeeRadar — Automatically calculate strokes
@@ -16323,14 +16368,55 @@ if (isLoggedIn()) {
       Number.isInteger(Number(strokesRaw)) &&
       Number(strokesRaw) > 0
     ) {
-      await savePremiumPlayerScore(
-        holeNumber,
-        playerNumber,
-        {
-          strokes: Number(strokesRaw),
-          strokes_if_missing: true
-        }
-      );
+      const result = await savePremiumPlayerScore(
+  holeNumber,
+  playerNumber,
+  {
+    strokes: Number(strokesRaw),
+    strokes_if_missing: true
+  }
+);
+
+const savedHole = result?.hole;
+
+if (!savedHole) {
+  throw new Error("Saved hole was not returned.");
+}
+
+const savedStrokes = getHolePlayerValue(
+  savedHole,
+  "strokes",
+  playerNumber - 1
+);
+
+if (
+  savedStrokes !== null &&
+  Number.isFinite(savedStrokes)
+) {
+  setHoleValueInTable(
+    holeNumber,
+    "strokes",
+    playerNumber,
+    savedStrokes
+  );
+}
+
+if (
+  currentRound &&
+  Array.isArray(currentRound.holesData)
+) {
+  const index = currentRound.holesData.findIndex(
+    row => Number(row?.hole_number) === holeNumber
+  );
+
+  if (index >= 0) {
+    currentRound.holesData[index] = savedHole;
+  } else {
+    currentRound.holesData.push(savedHole);
+  }
+}
+
+updateTotalsFromTable();
     }
   } catch (error) {
     console.error("Default score save failed:", error);
