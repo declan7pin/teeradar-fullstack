@@ -1956,9 +1956,43 @@ if (logoutBtn) {
         "authToken"
       );
 
-      localStorage.removeItem(
+            localStorage.removeItem(
         "teeradar_token"
       );
+
+      localStorage.removeItem("jwt");
+      localStorage.removeItem("access_token");
+
+      // Clear native Apple Watch authentication.
+      try {
+        const Watch =
+          window.Capacitor?.Plugins?.TeeRadarWatch;
+
+        if (
+          Watch &&
+          typeof Watch.clearAuthToken === "function"
+        ) {
+          await Watch.clearAuthToken();
+
+          console.log(
+            "Native Watch authentication cleared"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Native Watch logout failed:",
+          error
+        );
+
+        logoutBtn.disabled = false;
+        logoutBtn.textContent = "Log out";
+
+        alert(
+          "Native logout failed. Please try again."
+        );
+
+        return;
+      }
 
       window.location.href =
         "/index.html";
