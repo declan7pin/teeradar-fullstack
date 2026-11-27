@@ -17142,6 +17142,9 @@ async function savePremiumPlayerScore(
       "strokes"
     );
 
+  const strokesIfMissing =
+  req.body?.strokes_if_missing === true;
+
   const hasPutts =
     Object.prototype.hasOwnProperty.call(
       overrides,
