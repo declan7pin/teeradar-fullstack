@@ -16358,12 +16358,16 @@ if (isLoggedIn()) {
     !Number(playerUserIds[premiumPlayerIndex]);
 
   premiumScoreEditBusy += 1;
-  premiumScoreEditVersion += 1;
-  premNextBtn.disabled = true;
+premiumScoreEditVersion += 1;
+premNextBtn.disabled = true;
 
-  try {
-    if (
-      (isOwnPlayer || isUnlinkedPlayer) &&
+try {
+  // Retry any failed manual score submissions
+  // before allowing the golfer to continue.
+  await retryPremiumFailedScoreSaves();
+
+  if (
+    (isOwnPlayer || isUnlinkedPlayer) &&
       strokesRaw !== "" &&
       Number.isInteger(Number(strokesRaw)) &&
       Number(strokesRaw) > 0
@@ -17181,6 +17185,43 @@ if (canUsePremium) {
       for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
       return rows;
     }
+
+    async function retryPremiumFailedScoreSaves() {
+  if (!isLoggedIn() || !currentRoundId) {
+    return;
+  }
+
+  const roundId = String(currentRoundId);
+
+  for (const [key, pending] of premiumFailedScoreSaves) {
+    if (String(pending.roundId) !== roundId) {
+      continue;
+    }
+
+    if (String(currentRoundId) !== roundId) {
+      throw new Error("Round changed during score save.");
+    }
+
+    await savePremiumPlayerScore(
+      pending.holeNumber,
+      pending.playerNumber,
+      {
+        [pending.field]: pending.value
+      }
+    );
+
+    premiumFailedScoreSaves.delete(key);
+
+    setHoleValueInTable(
+      pending.holeNumber,
+      pending.field,
+      pending.playerNumber,
+      pending.value
+    );
+  }
+
+  updateTotalsFromTable();
+}
 
     // -------------------------------------------------
 // ✅ Save ONE player's score on ONE hole immediately
