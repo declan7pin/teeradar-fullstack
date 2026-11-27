@@ -16278,13 +16278,12 @@ premiumShowingTable = false;
 
     const pc =
       getPlayersCountFromRound(round);
-
-    /*
- * Save the selected player's displayed score
- * before moving to another player or hole.
+/*
+ * Save a default stroke count only when the
+ * player has no existing saved stroke count.
  *
- * Read directly from the visible selectors,
- * as live polling may have changed the hidden table.
+ * Never resubmit unchanged putts or overwrite
+ * an existing score from another device.
  */
 if (isLoggedIn()) {
   const playerNumber = premiumPlayerIndex + 1;
@@ -16293,51 +16292,48 @@ if (isLoggedIn()) {
   const strokesWheel =
     premScoreBtns?.querySelector("select");
 
-  const puttsWheel =
-    premPuttBtns?.querySelector("select");
-
   const strokesRaw = strokesWheel?.value ?? "";
-  const puttsRaw = puttsWheel?.value ?? "";
 
-  const scorePayload = {};
+  let playerUserIds =
+    currentRound?.player_user_ids || [];
 
-  if (
-    strokesRaw !== "" &&
-    Number.isFinite(Number(strokesRaw))
-  ) {
-    scorePayload.strokes = Number(strokesRaw);
+  if (typeof playerUserIds === "string") {
+    try {
+      playerUserIds = JSON.parse(playerUserIds);
+    } catch (_) {
+      playerUserIds = [];
+    }
   }
 
-  if (
-    puttsRaw !== "" &&
-    Number.isFinite(Number(puttsRaw))
-  ) {
-    scorePayload.putts = Number(puttsRaw);
-  }
+  const isOwnPlayer =
+    premiumPlayerIndex ===
+    getLoggedInRoundPlayerIndex(currentRound);
+
+  const isUnlinkedPlayer =
+    !Number(playerUserIds[premiumPlayerIndex]);
 
   premiumScoreEditBusy += 1;
-premiumScoreEditVersion += 1;
+  premiumScoreEditVersion += 1;
   premNextBtn.disabled = true;
 
   try {
-    if (Object.keys(scorePayload).length > 0) {
+    if (
+      (isOwnPlayer || isUnlinkedPlayer) &&
+      strokesRaw !== "" &&
+      Number.isInteger(Number(strokesRaw)) &&
+      Number(strokesRaw) > 0
+    ) {
       await savePremiumPlayerScore(
         holeNumber,
         playerNumber,
-        scorePayload
+        {
+          strokes: Number(strokesRaw),
+          strokes_if_missing: true
+        }
       );
-
-      for (const [field, value] of Object.entries(scorePayload)) {
-        setHoleValueInTable(
-          holeNumber,
-          field,
-          playerNumber,
-          value
-        );
-      }
     }
   } catch (error) {
-    console.error("Player score save failed:", error);
+    console.error("Default score save failed:", error);
 
     setToast(
       rightToast,
@@ -16348,9 +16344,10 @@ premiumScoreEditVersion += 1;
     return;
   } finally {
     premiumScoreEditBusy = Math.max(
-  0,
-  premiumScoreEditBusy - 1
-);
+      0,
+      premiumScoreEditBusy - 1
+    );
+
     premNextBtn.disabled = false;
   }
 }
@@ -17182,8 +17179,12 @@ async function savePremiumPlayerScore(
   };
 
   const payload = {
-    player_number: playerNum
-  };
+  player_number: playerNum
+};
+
+if (overrides.strokes_if_missing === true) {
+  payload.strokes_if_missing = true;
+}
 
   if (hasStrokes) {
     payload.strokes = normaliseScore(
