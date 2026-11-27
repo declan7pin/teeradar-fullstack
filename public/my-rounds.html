@@ -4959,6 +4959,7 @@ if (command.type === "change_hole") {
 let teeRadarLastWatchPayloadKey = "";
 let teeRadarLastWatchSentAt = 0;
 let teeRadarWatchSendInProgress = false;
+    
 async function syncTeeRadarLiveActivity() {
   if (!teeRadarIsNativeApp()) return;
 
@@ -5050,10 +5051,32 @@ async function syncTeeRadarLiveActivity() {
     teeRadarWatchSendInProgress = true;
 
     try {
-      await Watch.sendRound(watchData);
+  // Provide native Swift with the current authenticated session.
+  // The token is stored securely in the iOS Keychain.
+  try {
+    const token = getToken();
 
-      teeRadarLastWatchPayloadKey = watchKey;
-      teeRadarLastWatchSentAt = Date.now();
+    if (
+      token &&
+      typeof Watch.setAuthToken === "function"
+    ) {
+      await Watch.setAuthToken({ token });
+    } else if (
+      !token &&
+      typeof Watch.clearAuthToken === "function"
+    ) {
+      await Watch.clearAuthToken();
+    }
+  } catch (authError) {
+    console.warn(
+      "⚠️ Native Watch authentication sync failed"
+    );
+  }
+
+  await Watch.sendRound(watchData);
+
+  teeRadarLastWatchPayloadKey = watchKey;
+  teeRadarLastWatchSentAt = Date.now();
 
       console.log(
         "⌚ TeeRadar Apple Watch update sent",
@@ -19886,12 +19909,44 @@ window.addEventListener(
     // -----------------------------
     // Init + events
     // -----------------------------
-    function logout(){
-      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
-      setToast(leftToast, "Logged out.", true);
-      renderHeaderAuthState();
-      setTimeout(() => window.location.href = "/account.html", 450);
+    async function logout() {
+  const Watch =
+    window.Capacitor?.Plugins?.TeeRadarWatch;
+
+  // Remove existing browser authentication.
+  [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ].forEach(k => localStorage.removeItem(k));
+
+  // Remove native authentication from the iOS Keychain.
+  try {
+    if (
+      Watch &&
+      typeof Watch.clearAuthToken === "function"
+    ) {
+      await Watch.clearAuthToken();
+
+      console.log("Native Watch authentication cleared");
     }
+  } catch (error) {
+    console.error("Native Watch logout failed:", error);
+    setToast(leftToast, "Native logout failed. Please restart the app.", false);
+    return;
+  }
+
+  setToast(leftToast, "Logged out.", true);
+  renderHeaderAuthState();
+
+  setTimeout(
+    () => window.location.href = "/account.html",
+    450
+  );
+}
 
     if (logoutBtn) logoutBtn.addEventListener("click", () => {
   if (!isLoggedIn()) return;
