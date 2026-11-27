@@ -5759,16 +5759,19 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
 
     // Only modify fields explicitly supplied.
     const hasStrokes =
-      Object.prototype.hasOwnProperty.call(
-        req.body || {},
-        "strokes"
-      );
+  Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "strokes"
+  );
 
-    const hasPutts =
-      Object.prototype.hasOwnProperty.call(
-        req.body || {},
-        "putts"
-      );
+const strokesIfMissing =
+  req.body?.strokes_if_missing === true;
+
+const hasPutts =
+  Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "putts"
+  );
 
     const strokesVal =
       strokes === null ||
@@ -5875,11 +5878,22 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
           ),
 
           strokes_by_player =
-            CASE
-              WHEN NOT $10::boolean THEN
-                strokes_by_player
+  CASE
+    WHEN NOT $10::boolean THEN
+      strokes_by_player
 
-              WHEN $6::boolean THEN
+    WHEN $12::boolean AND (
+      COALESCE(
+        strokes_by_player ->> $3::text,
+        CASE
+          WHEN $3::text = '1' THEN strokes::text
+          ELSE NULL
+        END
+      ) IS NOT NULL
+    ) THEN
+      strokes_by_player
+
+    WHEN $6::boolean THEN
                 COALESCE(
                   strokes_by_player,
                   '{}'::jsonb
@@ -5922,12 +5936,19 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
 
           -- Legacy columns represent Player 1.
           strokes =
-            CASE
-              WHEN $3::text = '1'
-                AND $10::boolean
-                THEN $7
-              ELSE strokes
-            END,
+  CASE
+    WHEN $3::text = '1'
+      AND $10::boolean
+      AND NOT (
+        $12::boolean AND
+        COALESCE(
+          strokes_by_player ->> $3::text,
+          strokes::text
+        ) IS NOT NULL
+      )
+      THEN $7
+    ELSE strokes
+  END,
 
           putts =
             CASE
@@ -5977,6 +5998,7 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
 
           hasStrokes,
           hasPutts,
+          strokesIfMissing,
         ]
       );
 
