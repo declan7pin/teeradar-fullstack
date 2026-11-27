@@ -4940,10 +4940,88 @@ if (command.type === "change_hole") {
       }
     );
 
+        // Existing Watch command listener is registered.
     teeRadarWatchListenerRegistered = true;
 
     console.log(
       "⌚ Apple Watch command listener registered"
+    );
+
+    // ========================================================
+    // NATIVE WATCH SCORE CONFIRMATIONS
+    // ========================================================
+
+    await Watch.addListener(
+      "nativeScoreSaved",
+      async (confirmation) => {
+
+        const roundId = String(
+          confirmation?.roundId || ""
+        );
+
+        if (
+          !isLoggedIn() ||
+          !currentRound ||
+          String(currentRoundId) !== roundId ||
+          confirmation?.result?.ok !== true
+        ) {
+          return;
+        }
+
+        console.log(
+          "⌚ Native Watch score confirmed:",
+          confirmation
+        );
+
+        // Invalidate any older live score polling response.
+        premiumScoreEditVersion++;
+
+        // If the iPhone is locked, allow the existing
+        // visibility and live polling system to refresh
+        // the scorecard when the app becomes active.
+        if (
+          document.visibilityState !== "visible" ||
+          premiumScoreEditBusy ||
+          liveScoreSyncBusy
+        ) {
+          return;
+        }
+
+        try {
+
+          // Retrieve the latest authoritative scorecard.
+          // The backend has already saved the score.
+          // Do not submit another PUT request.
+          await syncCurrentRoundLive();
+
+          if (
+            !currentRound ||
+            String(currentRoundId) !== roundId ||
+            premiumScoreEditBusy ||
+            document.visibilityState !== "visible"
+          ) {
+            return;
+          }
+
+          // Synchronise the updated running score.
+          await syncTeeRadarLiveActivity();
+
+          console.log(
+            "✅ Native Watch score synchronised"
+          );
+
+        } catch (error) {
+
+          console.error(
+            "⚠️ Native Watch score refresh failed:",
+            error
+          );
+        }
+      }
+    );
+
+    console.log(
+      "⌚ Native Watch score confirmation listener registered"
     );
 
   } catch (error) {
